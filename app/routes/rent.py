@@ -1,19 +1,16 @@
-from app.auth.permissions import require_admin_or_landlord
-from fastapi import Depends, HTTPException
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from decimal import Decimal
 from datetime import date
 
 from app.database import get_db
-from app.models.rent import Rent
-from app.models.tenant import Tenant
 from app.auth.permissions import require_admin_or_landlord, require_admin
+from app.models import Rent, Tenant, Apartment, House
 from app.schemas.rent import (
     RentCreate,
     RentPayment,
-    RentResponse,
     RentUpdate,
+    RentResponse,
 )
 
 router = APIRouter(prefix="/rents", tags=["Rents"])
@@ -37,7 +34,7 @@ def create_rent(
     if user["role"] == "LANDLORD":
         if (
             not tenant.apartment
-            or tenant.apartment.house.landlord_id != user["id"]
+            or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
             raise HTTPException(403, "Tenant not found")
 
@@ -96,7 +93,7 @@ def pay_rent(
         tenant = rent.tenant
         if (
             not tenant.apartment
-            or tenant.apartment.house.landlord_id != user["id"]
+            or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
             raise HTTPException(403, "Rent record not found")
 
@@ -123,10 +120,10 @@ def list_rents(
 
     return (
         db.query(Rent)
-        .join(Rent.tenant)
-        .join(Tenant.apartment)
-        .join(Tenant.apartment.house)
-        .filter(Tenant.apartment.house.landlord_id == user["id"])
+        .join(Tenant, Rent.tenant_id == Tenant.id)
+        .join(Apartment, Tenant.apartment_id == Apartment.id)
+        .join(House, Apartment.house_id == House.id)
+        .filter(House.landlord_id == user["landlord_id"])
         .all()
     )
 
@@ -144,7 +141,7 @@ def tenant_rents(
     if user["role"] == "LANDLORD":
         if (
             not tenant.apartment
-            or tenant.apartment.house.landlord_id != user["id"]
+            or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
             raise HTTPException(403, "Tenant not found")
 
@@ -158,9 +155,23 @@ def update_rent(
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    rent = db.query(Rent).filter(Rent.id == rent_id).first()
+    # 🔐 Secure base query
+    query = (
+        db.query(Rent)
+        .join(Tenant, Rent.tenant_id == Tenant.id)
+        .join(Apartment, Tenant.apartment_id == Apartment.id)
+        .join(House, Apartment.house_id == House.id)
+        .filter(Rent.id == rent_id)
+    )
+
+    # 🔐 Enforce landlord ownership at QUERY level
+    if user["role"] == "LANDLORD":
+        query = query.filter(House.landlord_id == user["landlord_id"])
+
+    rent = query.first()
 
     if not rent:
+        # Hide existence
         raise HTTPException(status_code=404, detail="Rent record not found")
 
     # 🚫 Paid rent is immutable
@@ -181,16 +192,6 @@ def update_rent(
 
     # 🔐 LANDLORD restrictions
     if user["role"] == "LANDLORD":
-        tenant = rent.tenant
-
-        if (
-            not tenant.apartment
-            or tenant.apartment.house.landlord_id != user["id"]
-        ):
-            # Hide existence
-            raise HTTPException(
-                status_code=403, detail="Rent record not found")
-
         # 🚫 Landlord cannot modify dates
         if "start_date" in data or "end_date" in data:
             raise HTTPException(

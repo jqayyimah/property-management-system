@@ -11,9 +11,9 @@ class TenantCreate(BaseModel):
 
 
 class TenantUpdate(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
+    full_name: Optional[str] = None
 
 
 class TenantResponse(BaseModel):

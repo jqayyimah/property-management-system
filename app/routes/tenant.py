@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-
+from app.models.rent import Rent
 from app.database import get_db
+from app.models.house import House
 from app.models.tenant import Tenant
 from app.models.apartment import Apartment
 from app.auth.permissions import require_admin_or_landlord, require_admin
@@ -47,7 +48,7 @@ def create_tenant(
             raise HTTPException(status_code=404, detail="Apartment not found")
 
         # 🔐 Ownership enforcement
-        if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["id"]:
+        if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["landlord_id"]:
             raise HTTPException(status_code=403, detail="Apartment not found")
 
         # 🔒 Prevent double assignment
@@ -78,20 +79,21 @@ def create_tenant(
 
 
 @router.get("/", response_model=list[TenantResponse])
-def list_tenants(
+def list_rents(
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    if user["role"] == "ADMIN":
-        return db.query(Tenant).all()
-
-    return (
+    query = (
         db.query(Tenant)
-        .join(Apartment)
+        .join(Rent.tenant)
+        .join(Tenant.apartment)
         .join(Apartment.house)
-        .filter(Apartment.house.landlord_id == user["id"])
-        .all()
     )
+
+    if user["role"] == "LANDLORD":
+        query = query.filter(House.landlord_id == user["landlord_id"])
+
+    return query.all()
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)
@@ -105,7 +107,7 @@ def get_tenant(
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     if user["role"] == "LANDLORD":
-        if not tenant.apartment or tenant.apartment.house.landlord_id != user["id"]:
+        if not tenant.apartment or tenant.apartment.house.landlord_id != user["landlord_id"]:
             raise HTTPException(status_code=403, detail="Tenant not found")
 
     return tenant
@@ -123,10 +125,10 @@ def update_tenant(
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     if user["role"] == "LANDLORD":
-        if not tenant.apartment or tenant.apartment.house.landlord_id != user["id"]:
+        if not tenant.apartment or tenant.apartment.house.landlord_id != user["landlord_id"]:
             raise HTTPException(status_code=403, detail="Tenant not found")
 
-    data = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True, exclude_none=True)
 
     if "apartment_id" in data:
         raise HTTPException(
@@ -134,7 +136,8 @@ def update_tenant(
             detail="Apartment reassignment is not allowed. Use exit + assign flow.",
         )
 
-    if "email" in data:
+    # ✅ Email uniqueness check (ONLY if email is provided)
+    if data.get("email") is not None:
         existing = (
             db.query(Tenant)
             .filter(
@@ -143,12 +146,17 @@ def update_tenant(
             )
             .first()
         )
+
         if existing:
             raise HTTPException(
-                status_code=409, detail="Another tenant already uses this email")
+                status_code=409,
+                detail="Email already in use",
+            )
 
+    # ✅ Safe partial update
     for field, value in data.items():
-        setattr(tenant, field, value)
+        if value is not None:
+            setattr(tenant, field, value)
 
     db.commit()
     db.refresh(tenant)
@@ -167,7 +175,7 @@ def tenant_exit(
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     if user["role"] == "LANDLORD":
-        if not tenant.apartment or tenant.apartment.house.landlord_id != user["id"]:
+        if not tenant.apartment or tenant.apartment.house.landlord_id != user["landlord_id"]:
             raise HTTPException(status_code=403, detail="Tenant not found")
 
     if not tenant.apartment_id:

@@ -32,7 +32,7 @@ def create_apartment(
         raise HTTPException(status_code=404, detail="House not found")
 
     # 🔐 Ownership enforcement
-    if user["role"] == "LANDLORD" and house.landlord_id != user["id"]:
+    if user["role"] == "LANDLORD" and house.landlord_id != user["landlord_id"]:
         raise HTTPException(status_code=403, detail="House not found")
 
     apartment = Apartment(
@@ -58,7 +58,7 @@ def list_apartments(
     return (
         db.query(Apartment)
         .join(House)
-        .filter(House.landlord_id == user["id"])
+        .filter(House.landlord_id == user["landlord_id"])
         .all()
     )
 
@@ -79,16 +79,13 @@ def get_apartment(
     if not apartment:
         raise HTTPException(status_code=404, detail="Apartment not found")
 
-    if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["id"]:
+    if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["landlord_id"]:
         raise HTTPException(status_code=403, detail="Apartment not found")
 
     return apartment
 
 
-@router.put(
-    "/{apartment_id}",
-    response_model=ApartmentResponse,
-)
+@router.put("/{apartment_id}", response_model=ApartmentResponse)
 def update_apartment(
     apartment_id: int,
     payload: ApartmentUpdate,
@@ -97,7 +94,7 @@ def update_apartment(
 ):
     apartment = (
         db.query(Apartment)
-        .join(House)
+        .join(House, Apartment.house_id == House.id)
         .filter(Apartment.id == apartment_id)
         .first()
     )
@@ -105,15 +102,17 @@ def update_apartment(
     if not apartment:
         raise HTTPException(status_code=404, detail="Apartment not found")
 
-    if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["id"]:
-        raise HTTPException(status_code=403, detail="Apartment not found")
+    if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["landlord_id"]:
+        raise HTTPException(status_code=404, detail="Apartment not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    # ✅ MISSING LINE (this caused the crash)
+    data = payload.model_dump(exclude_unset=True)
+
+    for field, value in data.items():
         setattr(apartment, field, value)
 
     db.commit()
     db.refresh(apartment)
-
     return apartment
 
 

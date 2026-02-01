@@ -17,3 +17,4 @@ class Apartment(Base):
         back_populates="apartment",
         uselist=False,
     )
+
