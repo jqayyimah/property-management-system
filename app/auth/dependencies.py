@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
-from app.config import settings
+from app.config.settings import settings
 from app.auth.roles import Role
 from app.database import SessionLocal
 from app.models.user import User
