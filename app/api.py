@@ -27,9 +27,9 @@ app = FastAPI(
 
 Base.metadata.create_all(bind=engine)
 
+app.include_router(auth.router)
 app.include_router(landlord_router)
 app.include_router(house_router)
 app.include_router(apartment_router)
 app.include_router(tenant_router)
 app.include_router(rent_router)
-app.include_router(auth.router)

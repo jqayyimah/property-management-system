@@ -16,39 +16,39 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    response_model=LandlordResponse,
-)
-def create_landlord(
-    payload: LandlordCreate,
-    db: Session = Depends(get_db),
-    user=Depends(require_admin),
-):
-    existing = (
-        db.query(Landlord)
-        .filter(Landlord.email == payload.email)
-        .first()
-    )
+# @router.post(
+#     "/",
+#     status_code=status.HTTP_201_CREATED,
+#     response_model=LandlordResponse,
+# )
+# def create_landlord(
+#     payload: LandlordCreate,
+#     db: Session = Depends(get_db),
+#     user=Depends(require_admin),
+# ):
+#     existing = (
+#         db.query(Landlord)
+#         .filter(Landlord.email == payload.email)
+#         .first()
+#     )
 
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Landlord with this email already exists",
-        )
+#     if existing:
+#         raise HTTPException(
+#             status_code=status.HTTP_409_CONFLICT,
+#             detail="Landlord with this email already exists",
+#         )
 
-    landlord = Landlord(
-        full_name=payload.full_name,
-        email=payload.email,
-        phone=payload.phone,
-    )
+#     landlord = Landlord(
+#         full_name=payload.full_name,
+#         email=payload.email,
+#         phone=payload.phone,
+#     )
 
-    db.add(landlord)
-    db.commit()
-    db.refresh(landlord)
+#     db.add(landlord)
+#     db.commit()
+#     db.refresh(landlord)
 
-    return landlord
+#     return landlord
 
 
 @router.get("/", response_model=list[LandlordResponse])
@@ -63,7 +63,7 @@ def list_landlords(
 def get_landlord(
     landlord_id: int,
     db: Session = Depends(get_db),
-    user=Depends(require_admin_or_landlord),
+    user=Depends(require_admin),
 ):
     landlord = db.query(Landlord).filter(Landlord.id == landlord_id).first()
 
@@ -81,7 +81,7 @@ def update_landlord(
     landlord_id: int,
     payload: LandlordUpdate,
     db: Session = Depends(get_db),
-    user=Depends(require_admin_or_landlord),
+    user=Depends(require_admin),
 ):
     landlord = db.query(Landlord).filter(Landlord.id == landlord_id).first()
 
