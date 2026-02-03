@@ -12,6 +12,8 @@ from app.database import engine
 from app.scheduler import start_scheduler, shutdown_scheduler
 from app.routes import auth
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +25,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Property Management API",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*",  # TEMPORARY for dev (Figma + ngrok)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 Base.metadata.create_all(bind=engine)

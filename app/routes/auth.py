@@ -1,20 +1,35 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.auth.reset import generate_reset_token
+from datetime import datetime
+
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.landlord import Landlord
-from app.schemas.auth import LoginRequest, TokenResponse, LandlordSignup, UserResponse, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
+
+from app.schemas.auth import (
+    LoginRequest,
+    TokenResponse,
+    LandlordSignup,
+    UserResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ChangePasswordRequest,
+)
+
 from app.auth.security import hash_password, verify_password
 from app.auth.jwt import create_access_token
 from app.auth.permissions import require_admin
-from app.services.email_service import send_email
-from datetime import datetime
-from app.auth.security import verify_password
 from app.auth.dependencies import get_current_user
+from app.auth.reset import generate_reset_token
+
+from app.services.email_service import send_email
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+
+# -------------------------------------------------------------------
+# LANDLORD SIGNUP
+# -------------------------------------------------------------------
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def landlord_signup(
@@ -39,7 +54,7 @@ def landlord_signup(
         email=payload.email,
         password_hash=hash_password(payload.password),
         role=UserRole.LANDLORD,
-        is_active=False,        # 🔒 admin must activate
+        is_active=False,          # 🔒 admin activation required
         landlord_id=landlord.id,
     )
 
@@ -50,6 +65,10 @@ def landlord_signup(
         "message": "Signup successful. Await admin activation.",
     }
 
+
+# -------------------------------------------------------------------
+# ACTIVATE LANDLORD (ADMIN ONLY)
+# -------------------------------------------------------------------
 
 @router.post("/activate/{user_id}", dependencies=[Depends(require_admin)])
 def activate_landlord(
@@ -66,6 +85,10 @@ def activate_landlord(
 
     return {"message": "Landlord activated"}
 
+
+# -------------------------------------------------------------------
+# LOGIN
+# -------------------------------------------------------------------
 
 @router.post("/login", response_model=TokenResponse)
 def login(
@@ -86,11 +109,12 @@ def login(
             detail="User account is inactive",
         )
 
+    # ✅ FIX: serialize Enum properly for JWT
     token = create_access_token(
         {
             "sub": str(user.id),
-            "role": user.role,
-            "landlord_id": user.landlord_id,  # ✅ REQUIRED
+            "role": user.role.value,       # ← CRITICAL FIX
+            "landlord_id": user.landlord_id,
         }
     )
 
@@ -99,6 +123,10 @@ def login(
         "token_type": "bearer",
     }
 
+
+# -------------------------------------------------------------------
+# LIST USERS (ADMIN ONLY)
+# -------------------------------------------------------------------
 
 @router.get(
     "/users",
@@ -111,7 +139,11 @@ def list_users(
     return db.query(User).order_by(User.created_at.desc()).all()
 
 
-@router.post("/forgot-password", status_code=200)
+# -------------------------------------------------------------------
+# FORGOT PASSWORD
+# -------------------------------------------------------------------
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
 def forgot_password(
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
@@ -141,13 +173,17 @@ def forgot_password(
             """,
         )
 
-    # SAME RESPONSE always (security)
+    # Security: always return same response
     return {
         "message": "If the email exists, a password reset link has been sent."
     }
 
 
-@router.post("/reset-password", status_code=200)
+# -------------------------------------------------------------------
+# RESET PASSWORD
+# -------------------------------------------------------------------
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
 def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
@@ -168,7 +204,6 @@ def reset_password(
             detail="Invalid or expired reset token",
         )
 
-    # 🔐 Match new passwords
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=400,
@@ -186,7 +221,11 @@ def reset_password(
     }
 
 
-@router.post("/change-password", status_code=200)
+# -------------------------------------------------------------------
+# CHANGE PASSWORD (AUTHENTICATED)
+# -------------------------------------------------------------------
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
 def change_password(
     payload: ChangePasswordRequest,
     current_user=Depends(get_current_user),
@@ -194,14 +233,12 @@ def change_password(
 ):
     user = db.query(User).filter(User.id == current_user["id"]).first()
 
-    # 🔐 Verify old password
     if not verify_password(payload.old_password, user.password_hash):
         raise HTTPException(
             status_code=400,
             detail="Old password is incorrect",
         )
 
-    # 🔐 Match new passwords
     if payload.new_password != payload.confirm_password:
         raise HTTPException(
             status_code=400,
@@ -214,23 +251,24 @@ def change_password(
     return {"message": "Password changed successfully"}
 
 
+# -------------------------------------------------------------------
+# LOGOUT (CLIENT-SIDE JWT INVALIDATION)
+# -------------------------------------------------------------------
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout(
     current_user=Depends(get_current_user),
 ):
-    """
-    JWT logout is handled client-side.
-    This endpoint exists for symmetry & auditing.
-    """
     return {
         "message": "Logged out successfully"
     }
 
 
-@router.get(
-    "/me",
-    response_model=UserResponse,
-)
+# -------------------------------------------------------------------
+# CURRENT USER PROFILE
+# -------------------------------------------------------------------
+
+@router.get("/me", response_model=UserResponse)
 def get_current_logged_in_user(
     db: Session = Depends(get_db),
     user_ctx=Depends(get_current_user),
@@ -242,7 +280,6 @@ def get_current_logged_in_user(
     )
 
     if not user:
-        # Defensive – should not happen
         raise HTTPException(
             status_code=404,
             detail="User not found",

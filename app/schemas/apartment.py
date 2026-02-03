@@ -12,11 +12,23 @@ class ApartmentUpdate(BaseModel):
     is_vacant: Optional[bool] = None
 
 
+# ✅ NEW: lightweight tenant info for apartment listing
+class ApartmentTenantResponse(BaseModel):
+    id: int
+    full_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class ApartmentResponse(BaseModel):
     id: int
     unit_number: str
     is_vacant: bool
     house_id: int
+
+    # ✅ NEW FIELD
+    tenant: Optional[ApartmentTenantResponse] = None
 
     class Config:
         from_attributes = True

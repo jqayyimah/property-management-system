@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.auth.permissions import require_admin_or_landlord, require_admin
 from app.database import get_db
 from app.models.house import House
@@ -12,26 +13,35 @@ router = APIRouter(
 )
 
 
-# You can add permission dependencies here
-
-
 @router.post("/", status_code=201, response_model=HouseResponse)
 def create_house(
     payload: HouseCreate,
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    landlord = db.query(Landlord).filter(
-        Landlord.id == payload.landlord_id).first()
+    # 🔒 ADMIN can create for any landlord
+    if user["role"] == "ADMIN":
+        landlord_id = payload.landlord_id
 
+    # 🔒 LANDLORD can only create for self
+    else:
+        if not user.get("landlord_id"):
+            raise HTTPException(
+                status_code=403,
+                detail="Landlord account not activated",
+            )
+        landlord_id = user["landlord_id"]
+
+    landlord = db.query(Landlord).filter(Landlord.id == landlord_id).first()
     if not landlord:
-        raise HTTPException(404, "Invalid Information")
+        raise HTTPException(404, "Invalid landlord")
 
-    if user["role"] == "LANDLORD" and user["landlord_id"] != payload.landlord_id:
-        raise HTTPException(
-            403, "Invalid Information")
+    house = House(
+        name=payload.name,
+        address=payload.address,
+        landlord_id=landlord_id,
+    )
 
-    house = House(**payload.model_dump())
     db.add(house)
     db.commit()
     db.refresh(house)
@@ -46,7 +56,11 @@ def list_houses(
     if user["role"] == "ADMIN":
         return db.query(House).all()
 
-    return db.query(House).filter(House.landlord_id == user["landlord_id"]).all()
+    return (
+        db.query(House)
+        .filter(House.landlord_id == user["landlord_id"])
+        .all()
+    )
 
 
 @router.get("/{house_id}", response_model=HouseResponse)
@@ -89,7 +103,11 @@ def update_house(
     return house
 
 
-@router.delete("/{house_id}", dependencies=[Depends(require_admin)], status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{house_id}",
+    dependencies=[Depends(require_admin)],
+    status_code=status.HTTP_200_OK,
+)
 def delete_house(house_id: int, db: Session = Depends(get_db)):
     house = db.query(House).filter(House.id == house_id).first()
 

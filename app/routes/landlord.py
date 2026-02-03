@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth.permissions import require_admin_or_landlord, require_admin
+from app.auth.permissions import require_admin
 from app.database import get_db
 from app.models.landlord import Landlord
+from app.models.house import House
 from app.schemas.landlord import (
-    LandlordCreate,
     LandlordUpdate,
     LandlordResponse,
 )
@@ -14,41 +14,6 @@ router = APIRouter(
     prefix="/landlords",
     tags=["Landlords"],
 )
-
-
-# @router.post(
-#     "/",
-#     status_code=status.HTTP_201_CREATED,
-#     response_model=LandlordResponse,
-# )
-# def create_landlord(
-#     payload: LandlordCreate,
-#     db: Session = Depends(get_db),
-#     user=Depends(require_admin),
-# ):
-#     existing = (
-#         db.query(Landlord)
-#         .filter(Landlord.email == payload.email)
-#         .first()
-#     )
-
-#     if existing:
-#         raise HTTPException(
-#             status_code=status.HTTP_409_CONFLICT,
-#             detail="Landlord with this email already exists",
-#         )
-
-#     landlord = Landlord(
-#         full_name=payload.full_name,
-#         email=payload.email,
-#         phone=payload.phone,
-#     )
-
-#     db.add(landlord)
-#     db.commit()
-#     db.refresh(landlord)
-
-#     return landlord
 
 
 @router.get("/", response_model=list[LandlordResponse])
@@ -70,9 +35,6 @@ def get_landlord(
     if not landlord:
         raise HTTPException(status_code=404, detail="Landlord not found")
 
-    if user["role"] == "LANDLORD" and user["id"] != landlord_id:
-        raise HTTPException(status_code=403, detail="Landlord not found")
-
     return landlord
 
 
@@ -87,9 +49,6 @@ def update_landlord(
 
     if not landlord:
         raise HTTPException(status_code=404, detail="Landlord not found")
-
-    if user["role"] == "LANDLORD" and user["id"] != landlord_id:
-        raise HTTPException(status_code=403, detail="Landlord not found")
 
     # Email uniqueness check
     if payload.email:
@@ -116,10 +75,7 @@ def update_landlord(
     return landlord
 
 
-@router.delete(
-    "/{landlord_id}",
-    status_code=status.HTTP_200_OK,
-)
+@router.delete("/{landlord_id}", status_code=status.HTTP_200_OK)
 def delete_landlord(
     landlord_id: int,
     db: Session = Depends(get_db),
@@ -129,6 +85,19 @@ def delete_landlord(
 
     if not landlord:
         raise HTTPException(status_code=404, detail="Landlord not found")
+
+    # 🔒 Safety: prevent deleting landlord with houses
+    has_houses = (
+        db.query(House)
+        .filter(House.landlord_id == landlord_id)
+        .first()
+    )
+
+    if has_houses:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete landlord with existing houses",
+        )
 
     db.delete(landlord)
     db.commit()

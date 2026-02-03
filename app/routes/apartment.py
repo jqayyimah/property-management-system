@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth.permissions import require_admin_or_landlord, require_admin
 from app.database import get_db
@@ -33,7 +33,7 @@ def create_apartment(
 
     # 🔐 Ownership enforcement
     if user["role"] == "LANDLORD" and house.landlord_id != user["landlord_id"]:
-        raise HTTPException(status_code=403, detail="House not found")
+        raise HTTPException(status_code=404, detail="House not found")
 
     apartment = Apartment(
         unit_number=payload.unit_number,
@@ -43,7 +43,6 @@ def create_apartment(
     db.add(apartment)
     db.commit()
     db.refresh(apartment)
-
     return apartment
 
 
@@ -52,15 +51,16 @@ def list_apartments(
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    if user["role"] == "ADMIN":
-        return db.query(Apartment).all()
-
-    return (
+    query = (
         db.query(Apartment)
-        .join(House)
-        .filter(House.landlord_id == user["landlord_id"])
-        .all()
+        .options(joinedload(Apartment.tenant))  # ✅ LOAD TENANT
+        .join(House, Apartment.house_id == House.id)
     )
+
+    if user["role"] == "LANDLORD":
+        query = query.filter(House.landlord_id == user["landlord_id"])
+
+    return query.all()
 
 
 @router.get("/{apartment_id}", response_model=ApartmentResponse)
@@ -71,7 +71,8 @@ def get_apartment(
 ):
     apartment = (
         db.query(Apartment)
-        .join(House)
+        .options(joinedload(Apartment.tenant))  # ✅ LOAD TENANT
+        .join(House, Apartment.house_id == House.id)
         .filter(Apartment.id == apartment_id)
         .first()
     )
@@ -80,7 +81,7 @@ def get_apartment(
         raise HTTPException(status_code=404, detail="Apartment not found")
 
     if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["landlord_id"]:
-        raise HTTPException(status_code=403, detail="Apartment not found")
+        raise HTTPException(status_code=404, detail="Apartment not found")
 
     return apartment
 
@@ -105,7 +106,6 @@ def update_apartment(
     if user["role"] == "LANDLORD" and apartment.house.landlord_id != user["landlord_id"]:
         raise HTTPException(status_code=404, detail="Apartment not found")
 
-    # ✅ MISSING LINE (this caused the crash)
     data = payload.model_dump(exclude_unset=True)
 
     for field, value in data.items():
@@ -126,12 +126,13 @@ def delete_apartment(
     user=Depends(require_admin),
 ):
     apartment = db.query(Apartment).filter(
-        Apartment.id == apartment_id).first()
+        Apartment.id == apartment_id
+    ).first()
 
     if not apartment:
         raise HTTPException(status_code=404, detail="Apartment not found")
 
-    # 🔒 Safety checks (unchanged)
+    # 🔒 Safety checks
     if apartment.tenant is not None:
         raise HTTPException(
             status_code=409,

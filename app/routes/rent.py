@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import date
 
 from app.database import get_db
-from app.auth.permissions import require_admin_or_landlord, require_admin
+from app.auth.permissions import require_admin_or_landlord
 from app.models import Rent, Tenant, Apartment, House
 from app.schemas.rent import (
     RentCreate,
@@ -30,13 +30,12 @@ def create_rent(
     if not tenant:
         raise HTTPException(404, "Tenant not found")
 
-    # 🔐 Ownership enforcement
     if user["role"] == "LANDLORD":
         if (
             not tenant.apartment
             or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
-            raise HTTPException(403, "Tenant not found")
+            raise HTTPException(404, "Tenant not found")
 
     if payload.amount <= 0:
         raise HTTPException(400, "Rent amount must be greater than zero")
@@ -75,6 +74,10 @@ def create_rent(
     db.add(rent)
     db.commit()
     db.refresh(rent)
+
+    # ✅ Attach property
+    rent.property = tenant.apartment.house
+
     return rent
 
 
@@ -95,7 +98,10 @@ def pay_rent(
             not tenant.apartment
             or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
-            raise HTTPException(403, "Rent record not found")
+            raise HTTPException(404, "Rent record not found")
+
+    if rent.status == "PAID":
+        raise HTTPException(400, "Rent is already fully paid")
 
     payment = Decimal(str(payload.amount))
 
@@ -107,6 +113,8 @@ def pay_rent(
 
     db.commit()
     db.refresh(rent)
+
+    rent.property = rent.tenant.apartment.house
     return rent
 
 
@@ -115,17 +123,23 @@ def list_rents(
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    if user["role"] == "ADMIN":
-        return db.query(Rent).all()
-
-    return (
+    query = (
         db.query(Rent)
         .join(Tenant, Rent.tenant_id == Tenant.id)
         .join(Apartment, Tenant.apartment_id == Apartment.id)
         .join(House, Apartment.house_id == House.id)
-        .filter(House.landlord_id == user["landlord_id"])
-        .all()
     )
+
+    if user["role"] == "LANDLORD":
+        query = query.filter(House.landlord_id == user["landlord_id"])
+
+    rents = query.all()
+
+    # ✅ Attach property to each rent
+    for rent in rents:
+        rent.property = rent.tenant.apartment.house
+
+    return rents
 
 
 @router.get("/tenant/{tenant_id}", response_model=list[RentResponse])
@@ -143,9 +157,14 @@ def tenant_rents(
             not tenant.apartment
             or tenant.apartment.house.landlord_id != user["landlord_id"]
         ):
-            raise HTTPException(403, "Tenant not found")
+            raise HTTPException(404, "Tenant not found")
 
-    return db.query(Rent).filter(Rent.tenant_id == tenant_id).all()
+    rents = db.query(Rent).filter(Rent.tenant_id == tenant_id).all()
+
+    for rent in rents:
+        rent.property = tenant.apartment.house
+
+    return rents
 
 
 @router.put("/{rent_id}", response_model=RentResponse)
@@ -155,77 +174,51 @@ def update_rent(
     db: Session = Depends(get_db),
     user=Depends(require_admin_or_landlord),
 ):
-    # 🔐 Secure base query
     query = (
         db.query(Rent)
-        .join(Tenant, Rent.tenant_id == Tenant.id)
-        .join(Apartment, Tenant.apartment_id == Apartment.id)
-        .join(House, Apartment.house_id == House.id)
+        .join(Tenant)
+        .join(Apartment)
+        .join(House)
         .filter(Rent.id == rent_id)
     )
 
-    # 🔐 Enforce landlord ownership at QUERY level
     if user["role"] == "LANDLORD":
         query = query.filter(House.landlord_id == user["landlord_id"])
 
     rent = query.first()
-
     if not rent:
-        # Hide existence
-        raise HTTPException(status_code=404, detail="Rent record not found")
+        raise HTTPException(404, "Rent record not found")
 
-    # 🚫 Paid rent is immutable
     if rent.status == "PAID":
-        raise HTTPException(
-            status_code=400,
-            detail="Paid rent cannot be modified",
-        )
+        raise HTTPException(400, "Paid rent cannot be modified")
 
     data = payload.model_dump(exclude_unset=True)
 
-    # 🚫 Year is immutable for everyone
     if "year" in data:
-        raise HTTPException(
-            status_code=400,
-            detail="Rent year cannot be modified",
-        )
+        raise HTTPException(400, "Rent year cannot be modified")
 
-    # 🔐 LANDLORD restrictions
     if user["role"] == "LANDLORD":
-        # 🚫 Landlord cannot modify dates
         if "start_date" in data or "end_date" in data:
-            raise HTTPException(
-                status_code=400,
-                detail="Rent dates cannot be modified",
-            )
+            raise HTTPException(400, "Rent dates cannot be modified")
 
-        # 🚫 Prevent lowering below paid amount
         if "amount" in data:
-            new_amount = Decimal(str(data["amount"]))
-            if new_amount < rent.paid_amount:
+            if Decimal(str(data["amount"])) < rent.paid_amount:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Rent amount cannot be less than paid amount",
+                    400, "Rent amount cannot be less than paid amount"
                 )
 
-    # ✅ ADMIN extra validation
     if "start_date" in data and "end_date" in data:
         if data["start_date"] >= data["end_date"]:
-            raise HTTPException(
-                status_code=400,
-                detail="start_date must be before end_date",
-            )
+            raise HTTPException(400, "start_date must be before end_date")
 
     if "end_date" in data and data["end_date"] < date.today():
-        raise HTTPException(
-            status_code=400,
-            detail="end_date cannot be in the past",
-        )
+        raise HTTPException(400, "end_date cannot be in the past")
 
-    # 🔄 Apply updates
     for field, value in data.items():
         setattr(rent, field, value)
 
     db.commit()
     db.refresh(rent)
+
+    rent.property = rent.tenant.apartment.house
     return rent
