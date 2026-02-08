@@ -13,6 +13,19 @@ from app.scheduler import start_scheduler, shutdown_scheduler
 from app.routes import auth
 
 from fastapi.middleware.cors import CORSMiddleware
+from app.scheduler import start_scheduler, shutdown_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 🔵 Startup
+    start_scheduler()
+    yield
+    # 🔴 Shutdown
+    shutdown_scheduler()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @asynccontextmanager

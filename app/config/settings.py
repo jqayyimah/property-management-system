@@ -1,8 +1,8 @@
-
 import os
-from pydantic import BaseModel
 from dotenv import load_dotenv
-load_dotenv()   # 👈 MUST be first
+from pydantic import BaseModel
+
+load_dotenv()  # MUST be first
 
 
 class Settings(BaseModel):
@@ -21,11 +21,11 @@ class Settings(BaseModel):
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
-    SMTP_FROM_NAME: str | None = None   # ✅ MOVED INSIDE
+    SMTP_FROM_NAME: str | None = None
 
 
 settings = Settings(
-    JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY", "CHANGE_ME_SECRET"),
+    JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY"),
     SMTP_HOST=os.getenv("SMTP_HOST"),
     SMTP_PORT=int(os.getenv("SMTP_PORT")) if os.getenv("SMTP_PORT") else None,
     SMTP_USERNAME=os.getenv("SMTP_USERNAME"),
@@ -33,3 +33,6 @@ settings = Settings(
     SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL"),
     SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME"),
 )
+
+if not settings.JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY is not set in environment")

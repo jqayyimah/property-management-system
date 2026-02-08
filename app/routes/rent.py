@@ -13,6 +13,7 @@ from app.schemas.rent import (
     RentResponse,
 )
 
+
 router = APIRouter(prefix="/rents", tags=["Rents"])
 
 

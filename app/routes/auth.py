@@ -148,6 +148,7 @@ def forgot_password(
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
+    print(f"[FORGOT PASSWORD] Email requested for: {payload.email}")
     user = db.query(User).filter(User.email == payload.email).first()
 
     if user:

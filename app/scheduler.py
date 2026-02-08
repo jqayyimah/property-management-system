@@ -1,29 +1,47 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy.orm import Session
+
 from app.database import SessionLocal
 from app.services.rent_reminder_engine import run_rent_reminders
+
 
 scheduler = BackgroundScheduler()
 
 
+def rent_reminder_job():
+    db: Session = SessionLocal()
+    try:
+        print("⏰ Running rent reminder job...")
+        run_rent_reminders(db)
+        print("✅ Rent reminder job completed")
+    except Exception as e:
+        print("❌ Rent reminder job failed:", str(e))
+    finally:
+        db.close()
+
+
 def start_scheduler():
+    import os
+
+    if os.environ.get("RUN_MAIN") != "true":
+        return
+
+    if scheduler.running:
+        return
+
     scheduler.add_job(
-        func=run_job,
-        trigger="cron",
-        hour=9,   # every day at 9am
-        minute=0,
+        rent_reminder_job,
+        CronTrigger(hour=9, minute=0),
         id="rent_reminder_job",
         replace_existing=True,
     )
+
     scheduler.start()
+    print("📅 Scheduler started (Rent reminders enabled)")
 
 
 def shutdown_scheduler():
-    scheduler.shutdown()
-
-
-def run_job():
-    db = SessionLocal()
-    try:
-        run_rent_reminders(db)
-    finally:
-        db.close()
+    if scheduler.running:
+        scheduler.shutdown()
+        print("🛑 Scheduler stopped")

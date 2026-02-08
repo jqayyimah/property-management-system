@@ -6,7 +6,11 @@ from app.config.settings import settings
 
 
 def send_email(to_email: str, subject: str, body: str):
-    # DEV fallback
+    print("SMTP_HOST:", settings.SMTP_HOST)
+    print("SMTP_PORT:", settings.SMTP_PORT)
+    print("SMTP_USERNAME:", settings.SMTP_USERNAME)
+    print("SMTP_PASSWORD SET =", bool(settings.SMTP_PASSWORD))
+    # DEV fallback (only when SMTP is not configured)
     if not settings.SMTP_HOST or not settings.SMTP_USERNAME:
         print("=" * 50)
         print("[DEV EMAIL]")
@@ -26,15 +30,19 @@ def send_email(to_email: str, subject: str, body: str):
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.set_debuglevel(1)  # remove later in prod
-            server.starttls()
+        # ✅ IMPORTANT FIXES:
+        # - timeout to prevent hanging
+        # - EHLO before & after STARTTLS (required by Gmail)
+        with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
+            server.set_debuglevel(1)  # keep for now
             server.login(
                 settings.SMTP_USERNAME,
                 settings.SMTP_PASSWORD,
             )
             server.send_message(msg)
 
+        print(f"✅ Email sent to {to_email}")
+
     except Exception as e:
         # 🚨 NEVER crash auth flow
-        print("Email send failed:", str(e))
+        print("❌ Email send failed:", repr(e))
