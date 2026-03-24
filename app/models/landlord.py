@@ -4,7 +4,6 @@ from app.database import Base
 from sqlalchemy.sql import func
 
 
-
 class Landlord(Base):
     __tablename__ = "landlords"
 

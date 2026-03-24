@@ -1,0 +1,51 @@
+from pydantic import BaseModel
+from decimal import Decimal
+from datetime import date, datetime
+from typing import Optional
+
+
+class TriggerResponse(BaseModel):
+    success: bool
+    reminders_sent: int
+
+
+class ReminderSummary(BaseModel):
+    total_upcoming: int
+    total_overdue: int
+    total_sent_today: int
+
+
+class RentReminderInfo(BaseModel):
+    rent_id: int
+    tenant_id: int
+    tenant_name: str
+    property_name: str
+    apartment: str
+    end_date: date
+    amount: Decimal
+    paid_amount: Decimal
+    status: str
+    last_reminder_type: Optional[str] = None
+    last_reminder_sent_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReminderMessageUpdate(BaseModel):
+    message: str
+
+
+class ReminderMessageResponse(BaseModel):
+    message: str
+
+
+class ReminderLogResponse(BaseModel):
+    id: int
+    rent_id: int
+    tenant_id: int
+    reminder_type: str
+    message: str
+    status: str
+    sent_at: datetime
+
+    model_config = {"from_attributes": True}
