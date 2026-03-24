@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from decimal import Decimal
 from datetime import date
 
@@ -126,6 +126,11 @@ def list_rents(
 ):
     query = (
         db.query(Rent)
+        .options(
+            joinedload(Rent.tenant)
+            .joinedload(Tenant.apartment)
+            .joinedload(Apartment.house)
+        )
         .join(Tenant, Rent.tenant_id == Tenant.id)
         .join(Apartment, Tenant.apartment_id == Apartment.id)
         .join(House, Apartment.house_id == House.id)
@@ -136,7 +141,7 @@ def list_rents(
 
     rents = query.all()
 
-    # ✅ Attach property to each rent
+    # Attach property
     for rent in rents:
         rent.property = rent.tenant.apartment.house
 

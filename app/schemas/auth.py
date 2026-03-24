@@ -7,10 +7,13 @@ from app.models.user import UserRole
 class UserResponse(BaseModel):
     id: int
     email: str
-    role: UserRole
+    role: str
     is_active: bool
-    landlord_id: Optional[int]
-    created_at: datetime
+    landlord_id: Optional[int] = None
+
+    # 👤 Added
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -50,12 +53,6 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=8)
-    confirm_password: str
-
-
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
     confirm_password: str
 
 

@@ -4,6 +4,7 @@ from app.database import Base
 from sqlalchemy.sql import func
 
 
+
 class Landlord(Base):
     __tablename__ = "landlords"
 
@@ -13,19 +14,14 @@ class Landlord(Base):
     phone = Column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # ✅ STRING reference only
+    user = relationship(
+        "User",
+        back_populates="landlord",
+        uselist=False,
+    )
+
     houses = relationship(
         "House",
         back_populates="landlord",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
-
-
-user_id = Column(
-    Integer,
-    ForeignKey("users.id"),
-    nullable=True,  # IMPORTANT for backward compatibility
-    unique=True,
-)
-
-user = relationship("User")

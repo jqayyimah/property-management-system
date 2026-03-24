@@ -15,6 +15,9 @@ class Settings(BaseModel):
     ROLE_ADMIN: str = "ADMIN"
     ROLE_LANDLORD: str = "LANDLORD"
 
+    # 🌍 Frontend
+    FRONTEND_BASE_URL: str
+
     # 📧 Email (SMTP)
     SMTP_HOST: str | None = None
     SMTP_PORT: int | None = None
@@ -26,6 +29,7 @@ class Settings(BaseModel):
 
 settings = Settings(
     JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY"),
+    FRONTEND_BASE_URL=os.getenv("FRONTEND_BASE_URL"),
     SMTP_HOST=os.getenv("SMTP_HOST"),
     SMTP_PORT=int(os.getenv("SMTP_PORT")) if os.getenv("SMTP_PORT") else None,
     SMTP_USERNAME=os.getenv("SMTP_USERNAME"),

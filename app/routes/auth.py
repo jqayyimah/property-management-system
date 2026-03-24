@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 
+from app.config.settings import settings
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.landlord import Landlord
@@ -80,15 +81,49 @@ def activate_landlord(
     if not user or user.role != UserRole.LANDLORD:
         raise HTTPException(404, "Landlord user not found")
 
+    # 🔁 Track previous state
+    was_inactive = not user.is_active
+
+    # Activate account
     user.is_active = True
     db.commit()
+    db.refresh(user)
 
-    return {"message": "Landlord activated"}
+    # 📧 Send email ONLY on first activation
+    if was_inactive and user.email:
+        subject = "Your landlord account has been activated"
+        body = f"""
+        <p>Hello {user.email},</p>
 
+        <p>Your landlord account has been successfully activated by the administrator.</p>
+
+        <p>You can now log in and start managing your properties.</p>
+
+        <p>
+            <a href="{settings.FRONTEND_BASE_URL}/login">
+                Click here to log in
+            </a>
+        </p>
+
+        <p>Regards,<br/>
+        Property Management Team</p>
+        """
+
+        send_email(
+            to_email=user.email,
+            subject=subject,
+            body=body,
+        )
+
+    return {
+        "message": "Landlord activated successfully",
+        "user_id": user.id,
+    }
 
 # -------------------------------------------------------------------
 # LOGIN
 # -------------------------------------------------------------------
+
 
 @router.post("/login", response_model=TokenResponse)
 def login(
@@ -157,7 +192,7 @@ def forgot_password(
         user.reset_token_expiry = expiry
         db.commit()
 
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
+        reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password?token={token}"
 
         send_email(
             to_email=user.email,
@@ -269,6 +304,7 @@ def logout(
 # CURRENT USER PROFILE
 # -------------------------------------------------------------------
 
+
 @router.get("/me", response_model=UserResponse)
 def get_current_logged_in_user(
     db: Session = Depends(get_db),
@@ -276,14 +312,32 @@ def get_current_logged_in_user(
 ):
     user = (
         db.query(User)
+        .options(joinedload(User.landlord))
         .filter(User.id == user_ctx["id"])
         .first()
     )
 
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
-    return user
+    full_name = None
+    first_name = None
+
+    if user.landlord and user.landlord.full_name:
+        full_name = user.landlord.full_name
+        first_name = full_name.split(" ")[0]
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "landlord_id": user.landlord_id,
+        "full_name": full_name,
+        "first_name": first_name,
+    }
+
+
+@router.get("/reset-password")
+def reset_page(token: str):
+    return {"message": "Token received", "token": token}

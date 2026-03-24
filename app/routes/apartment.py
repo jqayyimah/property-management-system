@@ -35,8 +35,24 @@ def create_apartment(
     if user["role"] == "LANDLORD" and house.landlord_id != user["landlord_id"]:
         raise HTTPException(status_code=404, detail="House not found")
 
+    # DUPLICATE CHECK
+    existing = (
+        db.query(Apartment)
+        .filter(
+            Apartment.unit_number == payload.unit_number.strip(),
+            Apartment.house_id == payload.house_id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="An apartment with this unit number already exists in the specified house",
+        )
+
     apartment = Apartment(
         unit_number=payload.unit_number,
+        apartment_type=payload.apartment_type,
         house_id=payload.house_id,
     )
 

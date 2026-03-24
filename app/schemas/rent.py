@@ -7,6 +7,7 @@ class PropertySummary(BaseModel):
     id: int
     name: str
     address: str
+    landlord_id: int
 
     class Config:
         from_attributes = True
