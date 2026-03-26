@@ -35,6 +35,7 @@ export default function Properties() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<House | null>(null);
+  const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -70,6 +71,11 @@ export default function Properties() {
   );
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const handleWindowClick = () => setMenuTargetId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -217,21 +223,40 @@ export default function Properties() {
                       </td>
                       <td>{new Date(h.created_at).toLocaleDateString()}</td>
                       <td>
-                        <div className="table-actions">
+                        <div className="context-menu-wrap">
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={() => openEdit(h)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTargetId((current) => (current === h.id ? null : h.id));
+                            }}
                           >
-                            Edit
+                            Actions
                           </button>
-                          {isAdmin && (
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => setDeleteTarget(h)}
-                              disabled={deleting === h.id}
-                            >
-                              {deleting === h.id ? '...' : 'Delete'}
-                            </button>
+                          {menuTargetId === h.id && (
+                            <div className="context-menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="context-menu-item"
+                                onClick={() => {
+                                  openEdit(h);
+                                  setMenuTargetId(null);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              {isAdmin && (
+                                <button
+                                  className="context-menu-item context-menu-item-danger"
+                                  onClick={() => {
+                                    setDeleteTarget(h);
+                                    setMenuTargetId(null);
+                                  }}
+                                  disabled={deleting === h.id}
+                                >
+                                  {deleting === h.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>

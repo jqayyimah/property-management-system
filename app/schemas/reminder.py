@@ -47,6 +47,22 @@ class ReminderChannelsResponse(BaseModel):
     channels: list[str]
 
 
+class ReminderScheduleRule(BaseModel):
+    reminder_type: str
+    label: str
+    days_before_due: int
+    enabled: bool
+    trigger_time: str
+
+
+class ReminderScheduleUpdate(BaseModel):
+    rules: list[ReminderScheduleRule]
+
+
+class ReminderScheduleResponse(BaseModel):
+    rules: list[ReminderScheduleRule]
+
+
 class TestReminderRequest(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None

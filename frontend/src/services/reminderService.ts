@@ -5,6 +5,7 @@ import {
   TriggerResponse,
   ReminderLogEntry,
   ReminderChannelSettings,
+  ReminderScheduleSettings,
   TestReminderResponse,
 } from '../types';
 
@@ -31,6 +32,14 @@ export const getReminderChannels = () =>
 export const saveReminderChannels = (channels: string[]) =>
   api
     .put<ReminderChannelSettings>('/rent-reminders/channels', { channels })
+    .then((r) => r.data);
+
+export const getReminderSchedule = () =>
+  api.get<ReminderScheduleSettings>('/rent-reminders/schedule').then((r) => r.data);
+
+export const saveReminderSchedule = (rules: ReminderScheduleSettings['rules']) =>
+  api
+    .put<ReminderScheduleSettings>('/rent-reminders/schedule', { rules })
     .then((r) => r.data);
 
 export const sendTestReminder = (data: { email?: string; phone?: string }) =>

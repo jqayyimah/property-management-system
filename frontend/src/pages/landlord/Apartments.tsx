@@ -31,6 +31,7 @@ export default function Apartments() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Apartment | null>(null);
+  const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const houseMap = Object.fromEntries(houses.map((h) => [h.id, h]));
 
@@ -48,6 +49,11 @@ export default function Apartments() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const handleWindowClick = () => setMenuTargetId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const visible = apartments.filter((a) => {
     const matchesHouse = filterHouse ? a.house_id === filterHouse : true;
@@ -250,21 +256,40 @@ export default function Apartments() {
                       </td>
                       <td>{apt.tenant?.full_name ?? '—'}</td>
                       <td>
-                        <div className="table-actions">
+                        <div className="context-menu-wrap">
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={() => openEdit(apt)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTargetId((current) => (current === apt.id ? null : apt.id));
+                            }}
                           >
-                            Edit
+                            Actions
                           </button>
-                          {isAdmin && apt.is_vacant && (
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => setDeleteTarget(apt)}
-                              disabled={deleting === apt.id}
-                            >
-                              {deleting === apt.id ? '...' : 'Delete'}
-                            </button>
+                          {menuTargetId === apt.id && (
+                            <div className="context-menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="context-menu-item"
+                                onClick={() => {
+                                  openEdit(apt);
+                                  setMenuTargetId(null);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              {isAdmin && apt.is_vacant && (
+                                <button
+                                  className="context-menu-item context-menu-item-danger"
+                                  onClick={() => {
+                                    setDeleteTarget(apt);
+                                    setMenuTargetId(null);
+                                  }}
+                                  disabled={deleting === apt.id}
+                                >
+                                  {deleting === apt.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>

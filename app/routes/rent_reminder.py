@@ -11,6 +11,8 @@ from app.schemas.reminder import (
     ReminderMessageResponse,
     ReminderChannelsUpdate,
     ReminderChannelsResponse,
+    ReminderScheduleUpdate,
+    ReminderScheduleResponse,
     TestReminderRequest,
     TestReminderResponse,
     ReminderLogResponse,
@@ -146,6 +148,45 @@ def update_channels(
     )
     db.commit()
     return ReminderChannelsResponse(channels=channels)
+
+
+@router.get("/schedule", response_model=ReminderScheduleResponse)
+def get_schedule(
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_admin_or_landlord),
+):
+    return ReminderScheduleResponse(
+        rules=reminder_service.get_reminder_schedule(
+            db, landlord_id=_landlord_id(user)
+        )
+    )
+
+
+@router.put("/schedule", response_model=ReminderScheduleResponse)
+def update_schedule(
+    body: ReminderScheduleUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_admin_or_landlord),
+):
+    try:
+        rules = reminder_service.save_reminder_schedule(
+            db,
+            [rule.model_dump() for rule in body.rules],
+            landlord_id=_landlord_id(user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    create_audit_log(
+        db,
+        action="REMINDER_SCHEDULE_UPDATED",
+        entity_type="REMINDER_SETTINGS",
+        actor=user,
+        landlord_id=_landlord_id(user),
+        description="Reminder schedule updated",
+        details={"rules": rules},
+    )
+    db.commit()
+    return ReminderScheduleResponse(rules=rules)
 
 
 @router.post("/test-send", response_model=TestReminderResponse)

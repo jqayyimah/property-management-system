@@ -148,6 +148,18 @@ export interface ReminderChannelSettings {
   channels: ReminderChannel[];
 }
 
+export interface ReminderScheduleRule {
+  reminder_type: '30_DAYS' | '7_DAYS' | '3_DAYS' | 'DUE_TODAY' | 'OVERDUE';
+  label: string;
+  days_before_due: number;
+  enabled: boolean;
+  trigger_time: string;
+}
+
+export interface ReminderScheduleSettings {
+  rules: ReminderScheduleRule[];
+}
+
 export interface RentReminderInfo {
   rent_id: number;
   tenant_id: number;

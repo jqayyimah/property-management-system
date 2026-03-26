@@ -3,11 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import {
   getReminderChannels,
   getMessageTemplate,
+  getReminderSchedule,
   saveReminderChannels,
+  saveReminderSchedule,
   saveMessageTemplate,
   sendTestReminder,
 } from '../services/reminderService';
-import { ReminderChannel } from '../types';
+import { ReminderChannel, ReminderScheduleRule } from '../types';
 
 const CHANNEL_OPTIONS: Array<{
   value: ReminderChannel;
@@ -55,6 +57,8 @@ export default function ReminderConfig() {
   const [original, setOriginal] = useState('');
   const [channels, setChannels] = useState<ReminderChannel[]>([]);
   const [originalChannels, setOriginalChannels] = useState<ReminderChannel[]>([]);
+  const [scheduleRules, setScheduleRules] = useState<ReminderScheduleRule[]>([]);
+  const [originalScheduleRules, setOriginalScheduleRules] = useState<ReminderScheduleRule[]>([]);
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -77,6 +81,10 @@ export default function ReminderConfig() {
       setChannels(data.channels);
       setOriginalChannels(data.channels);
     });
+    getReminderSchedule().then((data) => {
+      setScheduleRules(data.rules);
+      setOriginalScheduleRules(data.rules);
+    });
   }, []);
 
   const handleSave = async () => {
@@ -92,9 +100,11 @@ export default function ReminderConfig() {
       await Promise.all([
         saveMessageTemplate(template),
         saveReminderChannels(channels),
+        saveReminderSchedule(scheduleRules),
       ]);
       setOriginal(template);
       setOriginalChannels(channels);
+      setOriginalScheduleRules(scheduleRules);
       setStatus('saved');
       setErrorMessage('');
     } catch {
@@ -107,7 +117,8 @@ export default function ReminderConfig() {
 
   const isDirty =
     template !== original ||
-    channels.join('|') !== originalChannels.join('|');
+    channels.join('|') !== originalChannels.join('|') ||
+    JSON.stringify(scheduleRules) !== JSON.stringify(originalScheduleRules);
 
   const handleTestSend = async () => {
     setSendingTest(true);
@@ -184,6 +195,82 @@ export default function ReminderConfig() {
 
       <div className="section-header">
         <div>
+          <h2 className="config-title">Reminder Schedule</h2>
+          <p className="config-hint">
+            Control when each reminder milestone becomes eligible for scheduler delivery.
+            All times are in WAT (UTC+1).
+          </p>
+        </div>
+        <span className="badge badge-vacant">
+          {scheduleRules.filter((rule) => rule.enabled).length} active
+        </span>
+      </div>
+
+      <div className="schedule-grid">
+        {scheduleRules.map((rule) => (
+          <div
+            key={rule.reminder_type}
+            className={`schedule-card ${rule.enabled ? 'is-active' : ''}`}
+          >
+            <div className="schedule-card-head">
+              <div>
+                <div className="toggle-title">{rule.label}</div>
+                <div className="toggle-desc">
+                  {rule.days_before_due < 0
+                    ? 'Triggers once after the due date has passed.'
+                    : rule.days_before_due === 0
+                      ? 'Triggers on the due date.'
+                      : `Triggers ${rule.days_before_due} day${rule.days_before_due === 1 ? '' : 's'} before the due date.`}
+                </div>
+              </div>
+              <label className="schedule-switch">
+                <input
+                  type="checkbox"
+                  checked={rule.enabled}
+                  onChange={(e) => {
+                    setStatus('idle');
+                    setErrorMessage('');
+                    setScheduleRules((current) =>
+                      current.map((item) =>
+                        item.reminder_type === rule.reminder_type
+                          ? { ...item, enabled: e.target.checked }
+                          : item
+                      )
+                    );
+                  }}
+                />
+                <span>{rule.enabled ? 'On' : 'Off'}</span>
+              </label>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Trigger Time</label>
+              <input
+                type="time"
+                className="form-input"
+                value={rule.trigger_time}
+                disabled={!rule.enabled}
+                onChange={(e) => {
+                  setStatus('idle');
+                  setErrorMessage('');
+                  setScheduleRules((current) =>
+                    current.map((item) =>
+                      item.reminder_type === rule.reminder_type
+                        ? { ...item, trigger_time: e.target.value }
+                        : item
+                    )
+                  );
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="divider" />
+
+      <div className="section-header">
+        <div>
           <h2 className="config-title">Reminder Message Template</h2>
           <p className="config-hint">
             Write the base message once. Email can render HTML while SMS,
@@ -245,6 +332,7 @@ export default function ReminderConfig() {
             onClick={() => {
               setTemplate(original);
               setChannels(originalChannels);
+              setScheduleRules(originalScheduleRules);
               setStatus('idle');
               setErrorMessage('');
             }}

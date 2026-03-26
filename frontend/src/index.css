@@ -1135,6 +1135,44 @@ tbody tr:last-child td {
   margin-bottom: 1.25rem;
 }
 
+.schedule-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 1.25rem;
+}
+
+.schedule-card {
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.schedule-card.is-active {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(239, 246, 255, 0.5);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.06);
+}
+
+.schedule-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.schedule-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .toggle-card {
   position: relative;
   display: flex;

@@ -88,6 +88,7 @@ export default function Rents() {
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const tenantMap = Object.fromEntries(tenants.map((t) => [t.id, t]));
 
@@ -126,6 +127,11 @@ export default function Rents() {
   );
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const handleWindowClick = () => setMenuTargetId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const openCreate = () => {
     setForm(emptyForm);
@@ -323,22 +329,41 @@ export default function Rents() {
                         </td>
                         <td>{r.end_date}</td>
                         <td>
-                          <div className="table-actions">
-                            {r.status !== 'PAID' && (
-                              <button
-                                className="btn btn-success btn-sm"
-                                onClick={() => openPay(r)}
-                              >
-                                Pay
-                              </button>
-                            )}
-                            {r.status !== 'PAID' && (
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => openEdit(r)}
-                              >
-                                Edit
-                              </button>
+                          <div className="context-menu-wrap">
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuTargetId((current) => (current === r.id ? null : r.id));
+                              }}
+                            >
+                              Actions
+                            </button>
+                            {menuTargetId === r.id && (
+                              <div className="context-menu" onClick={(e) => e.stopPropagation()}>
+                                {r.status !== 'PAID' && (
+                                  <button
+                                    className="context-menu-item"
+                                    onClick={() => {
+                                      openPay(r);
+                                      setMenuTargetId(null);
+                                    }}
+                                  >
+                                    Pay
+                                  </button>
+                                )}
+                                {r.status !== 'PAID' && (
+                                  <button
+                                    className="context-menu-item"
+                                    onClick={() => {
+                                      openEdit(r);
+                                      setMenuTargetId(null);
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>

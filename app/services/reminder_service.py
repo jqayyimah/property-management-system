@@ -6,9 +6,10 @@ Owns all reminder logic: querying, building messages, sending, deduplication, lo
 import json
 import re
 from html import unescape
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -29,8 +30,46 @@ from app.services.whatsapp_service import send_whatsapp
 
 TEMPLATE_SETTING_KEY = "reminder_message_template"
 CHANNELS_SETTING_KEY = "reminder_channels"
+SCHEDULE_SETTING_KEY = "reminder_schedule"
 SUPPORTED_CHANNELS = ("sms", "whatsapp", "email", "dashboard")
 DEFAULT_CHANNELS = ["sms", "whatsapp", "email", "dashboard"]
+DEFAULT_REMINDER_SCHEDULE = [
+    {
+        "reminder_type": "30_DAYS",
+        "label": "1 month before due date",
+        "days_before_due": 30,
+        "enabled": True,
+        "trigger_time": "09:00",
+    },
+    {
+        "reminder_type": "7_DAYS",
+        "label": "7 days before due date",
+        "days_before_due": 7,
+        "enabled": True,
+        "trigger_time": "09:00",
+    },
+    {
+        "reminder_type": "3_DAYS",
+        "label": "3 days before due date",
+        "days_before_due": 3,
+        "enabled": True,
+        "trigger_time": "09:00",
+    },
+    {
+        "reminder_type": "DUE_TODAY",
+        "label": "On the due date",
+        "days_before_due": 0,
+        "enabled": True,
+        "trigger_time": "09:00",
+    },
+    {
+        "reminder_type": "OVERDUE",
+        "label": "After the due date",
+        "days_before_due": -1,
+        "enabled": True,
+        "trigger_time": "09:00",
+    },
+]
 
 LEGACY_TEMPLATE = (
     "Dear {tenant_name},\n\n"
@@ -70,6 +109,7 @@ DEFAULT_TEMPLATE = (
 )
 
 SUBJECT_MAP = {
+    "30_DAYS": "Rent Reminder: 1 Month to Due Date",
     "7_DAYS": "Rent Reminder: 7 Days to Due Date",
     "3_DAYS": "Rent Reminder: 3 Days to Due Date",
     "DUE_TODAY": "Rent Due Today",
@@ -82,6 +122,7 @@ CHANNEL_SERVICE_COSTS = {
     "email": Decimal("2.50"),
     "dashboard": Decimal("0.00"),
 }
+WAT_TIMEZONE = ZoneInfo("Africa/Lagos")
 
 
 def _template_setting_keys(landlord_id: Optional[int]) -> list[str]:
@@ -89,6 +130,14 @@ def _template_setting_keys(landlord_id: Optional[int]) -> list[str]:
     if landlord_id is not None:
         keys.append(f"{TEMPLATE_SETTING_KEY}:landlord:{landlord_id}")
     keys.append(TEMPLATE_SETTING_KEY)
+    return keys
+
+
+def _schedule_setting_keys(landlord_id: Optional[int]) -> list[str]:
+    keys = []
+    if landlord_id is not None:
+        keys.append(f"{SCHEDULE_SETTING_KEY}:landlord:{landlord_id}")
+    keys.append(SCHEDULE_SETTING_KEY)
     return keys
 
 
@@ -162,6 +211,101 @@ def save_enabled_channels(db: Session, channels: list[str]) -> list[str]:
 
     db.commit()
     return normalized
+
+
+def _normalize_schedule_rule(raw_rule: dict) -> dict:
+    reminder_type = str(raw_rule.get("reminder_type", "")).upper()
+    default_rule = next(
+        (rule for rule in DEFAULT_REMINDER_SCHEDULE if rule["reminder_type"] == reminder_type),
+        None,
+    )
+    if not default_rule:
+        raise ValueError(f"Unsupported reminder type: {reminder_type}")
+
+    trigger_time = str(raw_rule.get("trigger_time", default_rule["trigger_time"])).strip()
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", trigger_time):
+        raise ValueError(f"Invalid trigger time for {reminder_type}. Use HH:MM format.")
+
+    return {
+        "reminder_type": reminder_type,
+        "label": default_rule["label"],
+        "days_before_due": default_rule["days_before_due"],
+        "enabled": bool(raw_rule.get("enabled", default_rule["enabled"])),
+        "trigger_time": trigger_time,
+    }
+
+
+def get_reminder_schedule(db: Session, landlord_id: Optional[int] = None) -> list[dict]:
+    for key in _schedule_setting_keys(landlord_id):
+        setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+        if not setting:
+            continue
+        try:
+            rules = json.loads(setting.value)
+        except json.JSONDecodeError:
+            break
+        if not isinstance(rules, list):
+            break
+        try:
+            normalized = [_normalize_schedule_rule(rule) for rule in rules]
+        except ValueError:
+            break
+        by_type = {rule["reminder_type"]: rule for rule in normalized}
+        return [
+            by_type.get(default_rule["reminder_type"], default_rule.copy())
+            for default_rule in DEFAULT_REMINDER_SCHEDULE
+        ]
+
+    return [rule.copy() for rule in DEFAULT_REMINDER_SCHEDULE]
+
+
+def save_reminder_schedule(
+    db: Session,
+    rules: list[dict],
+    landlord_id: Optional[int] = None,
+) -> list[dict]:
+    if not rules:
+        raise ValueError("At least one reminder schedule rule must be provided")
+
+    normalized = [_normalize_schedule_rule(rule) for rule in rules]
+    payload_by_type = {rule["reminder_type"]: rule for rule in normalized}
+    merged_rules = [
+        payload_by_type.get(default_rule["reminder_type"], default_rule.copy())
+        for default_rule in DEFAULT_REMINDER_SCHEDULE
+    ]
+
+    key = (
+        f"{SCHEDULE_SETTING_KEY}:landlord:{landlord_id}"
+        if landlord_id is not None
+        else SCHEDULE_SETTING_KEY
+    )
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+    payload = json.dumps(merged_rules)
+    if setting:
+        setting.value = payload
+    else:
+        db.add(AppSetting(key=key, value=payload))
+    db.commit()
+    return merged_rules
+
+
+def _schedule_allows_type(
+    db: Session,
+    reminder_type: str,
+    *,
+    landlord_id: Optional[int] = None,
+    now: Optional[datetime] = None,
+) -> bool:
+    current = now or datetime.now(WAT_TIMEZONE)
+    schedule = get_reminder_schedule(db, landlord_id=landlord_id)
+    rule = next((item for item in schedule if item["reminder_type"] == reminder_type), None)
+    if not rule or not rule["enabled"]:
+        return False
+
+    hour, minute = map(int, str(rule["trigger_time"]).split(":"))
+    scheduled_minutes = hour * 60 + minute
+    current_minutes = current.hour * 60 + current.minute
+    return current_minutes >= scheduled_minutes
 
 
 def _build_message(template: str, **ctx) -> str:
@@ -377,7 +521,12 @@ def get_rents_needing_reminders(
     return result
 
 
-def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
+def run_reminders(
+    db: Session,
+    landlord_id: Optional[int] = None,
+    *,
+    respect_schedule: bool = False,
+) -> int:
     """
     Evaluate every unpaid rent against reminder rules and dispatch reminders
     across all enabled channels.
@@ -391,7 +540,7 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
     if landlord_id is not None:
         ensure_landlord_can_send_reminders(db, landlord_id)
 
-    today = date.today()
+    today = datetime.now(WAT_TIMEZONE).date()
     enabled_channels = get_enabled_channels(db)
     rents = _base_unpaid_query(db, landlord_id).all()
     sent_count = 0
@@ -434,6 +583,12 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
         template = template_cache[template_owner_id]
 
         for reminder_type in due_types:
+            if respect_schedule and not _schedule_allows_type(
+                db,
+                reminder_type,
+                landlord_id=template_owner_id,
+            ):
+                continue
             # Deduplication check — skip if already sent for this (rent, type) pair
             already_sent = (
                 db.query(RentReminder)

@@ -1,12 +1,14 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
+from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
 from app.services.rent_reminder_engine import run_rent_reminders
 
 
-scheduler = BackgroundScheduler()
+WAT_TIMEZONE = ZoneInfo("Africa/Lagos")
+scheduler = BackgroundScheduler(timezone=WAT_TIMEZONE)
 
 
 def rent_reminder_job():
@@ -32,7 +34,7 @@ def start_scheduler():
 
     scheduler.add_job(
         rent_reminder_job,
-        CronTrigger(hour=9, minute=0),
+        CronTrigger(minute="*/15", timezone=WAT_TIMEZONE),
         id="rent_reminder_job",
         replace_existing=True,
     )

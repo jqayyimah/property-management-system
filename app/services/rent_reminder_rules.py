@@ -4,6 +4,7 @@ from datetime import date
 # Key   = reminder_type string stored in DB
 # Value = days before end_date (0 = due today, negative = overdue)
 REMINDER_RULES: dict[str, int] = {
+    "30_DAYS": 30,
     "7_DAYS": 7,
     "3_DAYS": 3,
     "DUE_TODAY": 0,
