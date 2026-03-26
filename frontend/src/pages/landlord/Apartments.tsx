@@ -8,11 +8,13 @@ import {
 } from '../../services/apartmentService';
 import { getHouses } from '../../services/houseService';
 import Modal from '../../components/Modal';
+import { useAuth } from '../../context/AuthContext';
 
 type ApiErr = { response?: { data?: { detail?: string } } };
 const emptyForm: ApartmentCreate = { unit_number: '', apartment_type: '', house_id: 0 };
 
 export default function Apartments() {
+  const { isAdmin } = useAuth();
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,7 +189,7 @@ export default function Apartments() {
                         >
                           Edit
                         </button>
-                        {apt.is_vacant && (
+                        {isAdmin && apt.is_vacant && (
                           <button
                             className="btn btn-sm"
                             style={{ background: '#ef4444', color: '#fff' }}

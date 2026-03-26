@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth.permissions import require_admin_or_landlord
+from app.auth.permissions import require_admin_or_landlord, require_admin
 from app.schemas.reminder import (
     TriggerResponse,
     ReminderSummary,
     RentReminderInfo,
     ReminderMessageUpdate,
     ReminderMessageResponse,
+    ReminderChannelsUpdate,
+    ReminderChannelsResponse,
+    TestReminderRequest,
+    TestReminderResponse,
     ReminderLogResponse,
 )
 from app.services import reminder_service
@@ -66,10 +70,12 @@ def trigger_reminders(
 @router.get("/settings", response_model=ReminderMessageResponse)
 def get_message_template(
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_admin_or_landlord),
+    user: dict = Depends(require_admin_or_landlord),
 ):
     return ReminderMessageResponse(
-        message=reminder_service.get_reminder_template(db)
+        message=reminder_service.get_reminder_template(
+            db, landlord_id=_landlord_id(user)
+        )
     )
 
 
@@ -77,10 +83,59 @@ def get_message_template(
 def update_message_template(
     body: ReminderMessageUpdate,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_admin_or_landlord),
+):
+    reminder_service.save_reminder_template(
+        db, body.message, landlord_id=_landlord_id(user)
+    )
+    return ReminderMessageResponse(message=body.message)
+
+
+@router.get("/channels", response_model=ReminderChannelsResponse)
+def get_channels(
+    db: Session = Depends(get_db),
     _user: dict = Depends(require_admin_or_landlord),
 ):
-    reminder_service.save_reminder_template(db, body.message)
-    return ReminderMessageResponse(message=body.message)
+    return ReminderChannelsResponse(
+        channels=reminder_service.get_enabled_channels(db)
+    )
+
+
+@router.put("/channels", response_model=ReminderChannelsResponse)
+def update_channels(
+    body: ReminderChannelsUpdate,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_admin_or_landlord),
+):
+    try:
+        channels = reminder_service.save_enabled_channels(db, body.channels)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ReminderChannelsResponse(channels=channels)
+
+
+@router.post("/test-send", response_model=TestReminderResponse)
+def test_send_reminder(
+    body: TestReminderRequest,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_admin),
+):
+    sent_channels = reminder_service.send_test_reminder(
+        db,
+        email=body.email,
+        phone=body.phone,
+    )
+
+    if not sent_channels:
+        raise HTTPException(
+            status_code=400,
+            detail="No enabled reminder channels could be sent. Provide email or phone as needed.",
+        )
+
+    return TestReminderResponse(
+        message="Test reminder sent successfully",
+        sent_channels=sent_channels,
+    )
 
 
 # ── Reminder history ─────────────────────────────────────────────────────────

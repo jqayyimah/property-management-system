@@ -2,11 +2,11 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
+    void logout();
     navigate('/login');
   };
 
@@ -18,10 +18,13 @@ export default function Layout() {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          <NavLink to="/properties">Properties</NavLink>
           <NavLink to="/apartments">Apartments</NavLink>
           <NavLink to="/tenants">Tenants</NavLink>
           <NavLink to="/rents">Rents</NavLink>
           <NavLink to="/reminders">Reminders</NavLink>
+          {isAdmin && <NavLink to="/admin/landlords">Landlords</NavLink>}
+          <NavLink to="/settings">Settings</NavLink>
         </nav>
       </aside>
       <div className="main-content">

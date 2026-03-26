@@ -120,6 +120,26 @@ def activate_landlord(
         "user_id": user.id,
     }
 
+
+@router.post("/deactivate/{user_id}", dependencies=[Depends(require_admin)])
+def deactivate_landlord(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user or user.role != UserRole.LANDLORD:
+        raise HTTPException(404, "Landlord user not found")
+
+    user.is_active = False
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Landlord deactivated successfully",
+        "user_id": user.id,
+    }
+
 # -------------------------------------------------------------------
 # LOGIN
 # -------------------------------------------------------------------

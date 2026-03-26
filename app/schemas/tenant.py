@@ -6,7 +6,7 @@ from datetime import datetime
 class TenantCreate(BaseModel):
     full_name: str
     email: EmailStr   # 🔐 mandatory
-    phone: Optional[str] = None
+    phone: str
     apartment_id: Optional[int] = None
 
 

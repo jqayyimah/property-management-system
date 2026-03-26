@@ -39,6 +39,24 @@ class ReminderMessageResponse(BaseModel):
     message: str
 
 
+class ReminderChannelsUpdate(BaseModel):
+    channels: list[str]
+
+
+class ReminderChannelsResponse(BaseModel):
+    channels: list[str]
+
+
+class TestReminderRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class TestReminderResponse(BaseModel):
+    message: str
+    sent_channels: list[str]
+
+
 class ReminderLogResponse(BaseModel):
     id: int
     rent_id: int
@@ -46,6 +64,7 @@ class ReminderLogResponse(BaseModel):
     reminder_type: str
     message: str
     status: str
+    channel_used: Optional[str] = None
     sent_at: datetime
 
     model_config = {"from_attributes": True}

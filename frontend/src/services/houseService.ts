@@ -12,3 +12,6 @@ export const createHouse = (data: HouseCreate) =>
 
 export const updateHouse = (id: number, data: Partial<HouseCreate>) =>
   api.put<House>(`/houses/${id}`, data).then((r) => r.data);
+
+export const deleteHouse = (id: number) =>
+  api.delete(`/houses/${id}`).then((r) => r.data);

@@ -144,14 +144,16 @@ export default function Properties() {
                         >
                           Edit
                         </button>
-                        <button
-                          className="btn btn-sm"
-                          style={{ background: '#ef4444', color: '#fff' }}
-                          onClick={() => handleDelete(h)}
-                          disabled={deleting === h.id}
-                        >
-                          {deleting === h.id ? '...' : 'Delete'}
-                        </button>
+                        {isAdmin && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ background: '#ef4444', color: '#fff' }}
+                            onClick={() => handleDelete(h)}
+                            disabled={deleting === h.id}
+                          >
+                            {deleting === h.id ? '...' : 'Delete'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

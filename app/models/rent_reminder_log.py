@@ -35,6 +35,7 @@ class RentReminderLog(Base):
 
     # SENT | FAILED
     status = Column(String(20), nullable=False, default="SENT")
+    channel_used = Column(String(20), nullable=True)
 
     sent_at = Column(
         DateTime(timezone=True),

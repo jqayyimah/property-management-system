@@ -14,3 +14,6 @@ export const updateApartment = (
   id: number,
   data: { unit_number?: string; apartment_type?: string; is_vacant?: boolean }
 ) => api.put<Apartment>(`/apartments/${id}`, data).then((r) => r.data);
+
+export const deleteApartment = (id: number) =>
+  api.delete(`/apartments/${id}`).then((r) => r.data);

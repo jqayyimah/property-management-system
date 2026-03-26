@@ -1,16 +1,41 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import ChangePassword from './pages/ChangePassword';
+import ForgotPassword from './pages/ForgotPassword';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Apartments from './pages/Apartments';
-import Tenants from './pages/Tenants';
-import Rents from './pages/Rents';
-import RentReminders from './pages/RentReminders';
+import ResetPassword from './pages/ResetPassword';
+import Signup from './pages/Signup';
+import Dashboard from './pages/landlord/LandlordDashboard';
+import AdminLandlords from './pages/admin/Landlords';
+import Properties from './pages/landlord/Properties';
+import Apartments from './pages/landlord/Apartments';
+import Tenants from './pages/landlord/Tenants';
+import Rents from './pages/landlord/Rents';
+import RentReminders from './pages/landlord/Reminders';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
+  const { token, authLoading } = useAuth();
+
+  if (authLoading) {
+    return <div className="loading">Loading...</div>;
+  }
+
   return token ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, authLoading } = useAuth();
+
+  if (authLoading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (!user) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  return user.role === 'ADMIN' ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -19,6 +44,9 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
           <Route
             path="/"
             element={
@@ -29,9 +57,19 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="apartments" element={<Apartments />} />
+            <Route path="properties" element={<Properties />} />
             <Route path="tenants" element={<Tenants />} />
             <Route path="rents" element={<Rents />} />
             <Route path="reminders" element={<RentReminders />} />
+            <Route path="settings" element={<ChangePassword />} />
+            <Route
+              path="admin/landlords"
+              element={
+                <AdminRoute>
+                  <AdminLandlords />
+                </AdminRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

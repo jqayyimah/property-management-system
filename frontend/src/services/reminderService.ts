@@ -4,6 +4,8 @@ import {
   RentReminderInfo,
   TriggerResponse,
   ReminderLogEntry,
+  ReminderChannelSettings,
+  TestReminderResponse,
 } from '../types';
 
 export const getReminderSummary = () =>
@@ -22,6 +24,17 @@ export const saveMessageTemplate = (message: string) =>
   api
     .put<{ message: string }>('/rent-reminders/settings', { message })
     .then((r) => r.data.message);
+
+export const getReminderChannels = () =>
+  api.get<ReminderChannelSettings>('/rent-reminders/channels').then((r) => r.data);
+
+export const saveReminderChannels = (channels: string[]) =>
+  api
+    .put<ReminderChannelSettings>('/rent-reminders/channels', { channels })
+    .then((r) => r.data);
+
+export const sendTestReminder = (data: { email?: string; phone?: string }) =>
+  api.post<TestReminderResponse>('/rent-reminders/test-send', data).then((r) => r.data);
 
 export const getReminderLogs = (limit = 100) =>
   api

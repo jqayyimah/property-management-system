@@ -26,6 +26,11 @@ class Settings(BaseModel):
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str | None = None
 
+    # 📲 Termii messaging
+    TERMII_API_KEY: str | None = None
+    TERMII_SENDER_ID: str | None = None
+    TERMII_WHATSAPP_SENDER_ID: str | None = None
+
 
 settings = Settings(
     JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY"),
@@ -36,6 +41,9 @@ settings = Settings(
     SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
     SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL"),
     SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME"),
+    TERMII_API_KEY=os.getenv("TERMII_API_KEY"),
+    TERMII_SENDER_ID=os.getenv("TERMII_SENDER_ID"),
+    TERMII_WHATSAPP_SENDER_ID=os.getenv("TERMII_WHATSAPP_SENDER_ID"),
 )
 
 if not settings.JWT_SECRET_KEY:

@@ -223,11 +223,12 @@ export default function Tenants() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Phone (optional)</label>
+              <label className="form-label">Phone</label>
               <input
                 className="form-input"
                 value={form.phone ?? ''}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                required={!editTarget}
               />
             </div>
             {!editTarget && (

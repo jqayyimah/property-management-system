@@ -8,6 +8,18 @@ export interface User {
   first_name: string | null;
 }
 
+export interface LandlordInfo {
+  id: number;
+  full_name: string;
+  email: string;
+  phone: string | null;
+}
+
+export interface AdminLandlord extends LandlordInfo {
+  user_id: number | null;
+  is_active: boolean;
+}
+
 export interface House {
   id: number;
   name: string;
@@ -50,7 +62,7 @@ export interface Tenant {
 export interface TenantCreate {
   full_name: string;
   email: string;
-  phone?: string;
+  phone: string;
   apartment_id?: number;
 }
 
@@ -91,6 +103,12 @@ export interface ReminderSummary {
   total_sent_today: number;
 }
 
+export type ReminderChannel = 'sms' | 'whatsapp' | 'email' | 'dashboard';
+
+export interface ReminderChannelSettings {
+  channels: ReminderChannel[];
+}
+
 export interface RentReminderInfo {
   rent_id: number;
   tenant_id: number;
@@ -110,6 +128,11 @@ export interface TriggerResponse {
   reminders_sent: number;
 }
 
+export interface TestReminderResponse {
+  message: string;
+  sent_channels: string[];
+}
+
 export interface ReminderLogEntry {
   id: number;
   rent_id: number;
@@ -117,7 +140,48 @@ export interface ReminderLogEntry {
   reminder_type: string;
   message: string;
   status: string;
+  channel_used?: string | null;
   sent_at: string;
+}
+
+export interface DashboardTotals {
+  properties: number;
+  apartments: number;
+  vacant_apartments: number;
+  tenants: number;
+  overdue_rents: number;
+  upcoming_rents: number;
+}
+
+export interface DashboardFinancials {
+  expected_rent: number;
+  paid_rent: number;
+  outstanding_rent: number;
+}
+
+export interface DashboardRecentRent {
+  id: number;
+  tenant_name: string;
+  property_name: string;
+  amount: number;
+  status: string;
+  end_date: string;
+}
+
+export interface DashboardUpcomingRent {
+  id: number;
+  tenant_name: string;
+  property_name: string;
+  end_date: string;
+  days_remaining: number;
+}
+
+export interface LandlordSummary {
+  totals: DashboardTotals;
+  financials: DashboardFinancials;
+  recent_rents: DashboardRecentRent[];
+  upcoming_due_rents: DashboardUpcomingRent[];
+  recent_reminders: ReminderLogEntry[];
 }
 
 export const APARTMENT_TYPES = [
