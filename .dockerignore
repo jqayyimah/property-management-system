@@ -1,0 +1,12 @@
+.git
+.gitignore
+.DS_Store
+.venv
+venv
+__pycache__
+.pytest_cache
+frontend
+tests
+scripts
+README.md
+PROJECT_MEMORY.md
