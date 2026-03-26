@@ -7,6 +7,7 @@ import json
 import re
 from html import unescape
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -18,6 +19,7 @@ from app.models.house import House
 from app.models.rent_reminder import RentReminder
 from app.models.rent_reminder_log import RentReminderLog
 from app.models.app_setting import AppSetting
+from app.services import billing_service
 from app.services.rent_reminder_rules import get_due_reminder_types
 from app.services.email_service import send_email
 from app.services.sms_service import send_sms
@@ -74,6 +76,13 @@ SUBJECT_MAP = {
     "OVERDUE": "⚠️ Overdue Rent Notice",
 }
 
+CHANNEL_SERVICE_COSTS = {
+    "sms": Decimal("5.00"),
+    "whatsapp": Decimal("12.00"),
+    "email": Decimal("2.50"),
+    "dashboard": Decimal("0.00"),
+}
+
 
 def _template_setting_keys(landlord_id: Optional[int]) -> list[str]:
     keys = []
@@ -112,7 +121,8 @@ def save_reminder_template(
 
 def get_enabled_channels(db: Session) -> list[str]:
     setting = (
-        db.query(AppSetting).filter(AppSetting.key == CHANNELS_SETTING_KEY).first()
+        db.query(AppSetting).filter(
+            AppSetting.key == CHANNELS_SETTING_KEY).first()
     )
     if not setting:
         return DEFAULT_CHANNELS.copy()
@@ -140,7 +150,8 @@ def save_enabled_channels(db: Session, channels: list[str]) -> list[str]:
         raise ValueError("At least one reminder channel must be enabled")
 
     setting = (
-        db.query(AppSetting).filter(AppSetting.key == CHANNELS_SETTING_KEY).first()
+        db.query(AppSetting).filter(
+            AppSetting.key == CHANNELS_SETTING_KEY).first()
     )
     payload = json.dumps(normalized)
 
@@ -160,6 +171,42 @@ def _build_message(template: str, **ctx) -> str:
         return DEFAULT_TEMPLATE.format(**ctx)
 
 
+def _looks_like_html(message: str) -> bool:
+    return bool(re.search(r"<[a-z][\s\S]*>", message, flags=re.IGNORECASE))
+
+
+def _plain_text_to_html(message: str) -> str:
+    escaped = (
+        message.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    paragraphs = [part.strip()
+                  for part in re.split(r"\n\s*\n", escaped) if part.strip()]
+    rendered = "".join(
+        (
+            "<p style=\"margin:0 0 16px;font-size:16px;line-height:1.75;color:#334155;\">"
+            f"{part.replace(chr(10), '<br>')}"
+            "</p>"
+        )
+        for part in paragraphs
+    )
+
+    return (
+        "<div style=\"margin:0;padding:24px 0;background:#f4efe7;font-family:Georgia,'Times New Roman',serif;color:#1f2937;\">"
+        "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eadfce;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.08);\">"
+        "<div style=\"padding:28px 32px;background:linear-gradient(135deg,#0f766e,#115e59);color:#ffffff;\">"
+        "<div style=\"font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.85;\">Property Management</div>"
+        "<h1 style=\"margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:700;\">Rent Reminder</h1>"
+        "</div>"
+        "<div style=\"padding:32px;\">"
+        f"{rendered}"
+        "</div>"
+        "</div>"
+        "</div>"
+    )
+
+
 def _html_to_text(message: str) -> str:
     text = re.sub(r"<br\s*/?>", "\n", message, flags=re.IGNORECASE)
     text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
@@ -171,7 +218,16 @@ def _html_to_text(message: str) -> str:
 
 def _build_channel_message(channel: str, template: str, **ctx) -> str:
     message = _build_message(template, **ctx)
-    return message if channel == "email" else _html_to_text(message)
+    if channel == "email":
+        return message if _looks_like_html(message) else _plain_text_to_html(message)
+    return _html_to_text(message)
+
+
+def get_channel_service_cost(channel: Optional[str], status: str = "SENT") -> Decimal:
+    normalized_channel = str(channel or "").lower()
+    if status != "SENT":
+        return Decimal("0.00")
+    return CHANNEL_SERVICE_COSTS.get(normalized_channel, Decimal("0.00"))
 
 
 def send_test_reminder(
@@ -207,6 +263,13 @@ def send_test_reminder(
             sent_channels.append(channel)
 
     return sent_channels
+
+
+def ensure_landlord_can_send_reminders(db: Session, landlord_id: int) -> None:
+    if not billing_service.has_active_landlord_plan_access(db, landlord_id):
+        raise ValueError(
+            "Your free trial has ended and no active annual plan was found. Upgrade your billing plan to send rent reminders."
+        )
 
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
@@ -325,6 +388,9 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
 
     Returns the number of reminders successfully sent this run.
     """
+    if landlord_id is not None:
+        ensure_landlord_can_send_reminders(db, landlord_id)
+
     today = date.today()
     enabled_channels = get_enabled_channels(db)
     rents = _base_unpaid_query(db, landlord_id).all()
@@ -354,6 +420,11 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
         )
         outstanding = rent.amount - rent.paid_amount
         template_owner_id = house.landlord_id if house else None
+
+        if template_owner_id is not None and not billing_service.has_active_landlord_plan_access(
+            db, template_owner_id
+        ):
+            continue
 
         if template_owner_id not in template_cache:
             template_cache[template_owner_id] = get_reminder_template(
@@ -401,11 +472,13 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
                             send_email(tenant.email, subject, message)
                         except Exception as exc:
                             send_status = "FAILED"
-                            print(f"❌ Email failed for tenant {tenant.id}: {exc}")
+                            print(
+                                f"❌ Email failed for tenant {tenant.id}: {exc}")
                 elif channel == "sms":
                     channel_attempted = True
                     send_status = (
-                        "SENT" if tenant.phone and send_sms(tenant.phone, message) else "FAILED"
+                        "SENT" if tenant.phone and send_sms(
+                            tenant.phone, message) else "FAILED"
                     )
                 elif channel == "whatsapp":
                     channel_attempted = True
@@ -425,6 +498,9 @@ def run_reminders(db: Session, landlord_id: Optional[int] = None) -> int:
                         message=message,
                         status=send_status,
                         channel_used=channel,
+                        service_cost=get_channel_service_cost(
+                            channel, send_status),
+                        cost_currency="NGN",
                     )
                 )
 

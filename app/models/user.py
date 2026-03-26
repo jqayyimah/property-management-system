@@ -18,6 +18,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False)
     is_active = Column(Boolean, default=False)
+    is_email_verified = Column(Boolean, default=False)
 
     landlord_id = Column(
         Integer,
@@ -30,3 +31,5 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     reset_token = Column(String(255), nullable=True, index=True)
     reset_token_expiry = Column(DateTime, nullable=True)
+    email_verification_token = Column(String(255), nullable=True, index=True)
+    email_verification_token_expiry = Column(DateTime, nullable=True)

@@ -10,6 +10,8 @@ from app.routes.house import router as house_router
 from app.routes.apartment import router as apartment_router
 from app.routes.tenant import router as tenant_router
 from app.routes.rent_reminder import router as rent_reminder_router
+from app.routes.billing import router as billing_router
+from app.routes.audit_log import router as audit_log_router
 
 from app.models import *  # noqa: F401, F403 — registers all models for Base.metadata
 from app.database import Base, engine, ensure_schema_updates  # use the same Base all models inherit from
@@ -47,3 +49,5 @@ app.include_router(apartment_router)
 app.include_router(tenant_router)
 app.include_router(rent_router)
 app.include_router(rent_reminder_router)
+app.include_router(billing_router)
+app.include_router(audit_log_router)

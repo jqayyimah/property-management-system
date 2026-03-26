@@ -10,7 +10,7 @@ class House(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     address = Column(String(255), nullable=False)
-    landlord_id = Column(Integer, ForeignKey("landlords.id"), nullable=False)
+    landlord_id = Column(Integer, ForeignKey("landlords.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     landlord = relationship(

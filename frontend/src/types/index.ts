@@ -3,9 +3,34 @@ export interface User {
   email: string;
   role: 'ADMIN' | 'LANDLORD';
   is_active: boolean;
+  is_email_verified: boolean;
   landlord_id: number | null;
   full_name: string | null;
   first_name: string | null;
+}
+
+export interface BillingPlan {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  price_amount: string;
+  currency: string;
+  house_limit: number;
+  duration_days: number | null;
+  is_default: boolean;
+  is_active: boolean;
+}
+
+export interface BillingSubscription {
+  plan: BillingPlan;
+  house_limit: number;
+  houses_used: number;
+  houses_remaining: number;
+  subscription_status: string;
+  started_at: string | null;
+  ends_at: string | null;
+  provider: string | null;
 }
 
 export interface LandlordInfo {
@@ -18,6 +43,20 @@ export interface LandlordInfo {
 export interface AdminLandlord extends LandlordInfo {
   user_id: number | null;
   is_active: boolean;
+  billing_status: string;
+  billing_access_active: boolean;
+  current_plan_name: string | null;
+  plan_ends_at: string | null;
+  current_plan_amount: string | null;
+  sms_sent_count: number;
+  whatsapp_sent_count: number;
+  email_sent_count: number;
+  sms_cost_total: string;
+  whatsapp_cost_total: string;
+  email_cost_total: string;
+  service_cost_total: string;
+  upgrade_recommended: boolean;
+  upgrade_recommendation_reason: string | null;
 }
 
 export interface House {
@@ -63,7 +102,7 @@ export interface TenantCreate {
   full_name: string;
   email: string;
   phone: string;
-  apartment_id?: number;
+  apartment_id: number;
 }
 
 export interface PropertySummary {
@@ -137,10 +176,14 @@ export interface ReminderLogEntry {
   id: number;
   rent_id: number;
   tenant_id: number;
+  tenant_name?: string | null;
+  landlord_name?: string | null;
   reminder_type: string;
   message: string;
   status: string;
   channel_used?: string | null;
+  service_cost?: string | null;
+  cost_currency?: string | null;
   sent_at: string;
 }
 

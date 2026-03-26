@@ -6,6 +6,8 @@ from app.database import get_db
 from app.models.house import House
 from app.models.landlord import Landlord
 from app.schemas.house import HouseCreate, HouseUpdate, HouseResponse
+from app.services import billing_service
+from app.services.audit_service import create_audit_log
 
 router = APIRouter(
     prefix="/houses",
@@ -36,6 +38,9 @@ def create_house(
     if not landlord:
         raise HTTPException(404, "Invalid landlord")
 
+    if user["role"] == "LANDLORD":
+        billing_service.ensure_house_capacity(db, landlord_id)
+
     house = House(
         name=payload.name,
         address=payload.address,
@@ -43,6 +48,17 @@ def create_house(
     )
 
     db.add(house)
+    db.flush()
+    create_audit_log(
+        db,
+        action="HOUSE_CREATED",
+        entity_type="HOUSE",
+        entity_id=house.id,
+        actor=user,
+        landlord_id=landlord_id,
+        description="House created",
+        details={"name": house.name, "address": house.address},
+    )
     db.commit()
     db.refresh(house)
     return house
@@ -98,6 +114,16 @@ def update_house(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(house, field, value)
 
+    create_audit_log(
+        db,
+        action="HOUSE_UPDATED",
+        entity_type="HOUSE",
+        entity_id=house.id,
+        actor=user,
+        landlord_id=house.landlord_id,
+        description="House updated",
+        details=payload.model_dump(exclude_unset=True),
+    )
     db.commit()
     db.refresh(house)
     return house
@@ -108,7 +134,11 @@ def update_house(
     dependencies=[Depends(require_admin)],
     status_code=status.HTTP_200_OK,
 )
-def delete_house(house_id: int, db: Session = Depends(get_db)):
+def delete_house(
+    house_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
     house = db.query(House).filter(House.id == house_id).first()
 
     if not house:
@@ -117,6 +147,16 @@ def delete_house(house_id: int, db: Session = Depends(get_db)):
             detail="House not found",
         )
 
+    create_audit_log(
+        db,
+        action="HOUSE_DELETED",
+        entity_type="HOUSE",
+        entity_id=house.id,
+        actor=user,
+        landlord_id=house.landlord_id,
+        description="House deleted",
+        details={"name": house.name},
+    )
     db.delete(house)
     db.commit()
 

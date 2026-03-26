@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -36,6 +36,8 @@ class RentReminderLog(Base):
     # SENT | FAILED
     status = Column(String(20), nullable=False, default="SENT")
     channel_used = Column(String(20), nullable=True)
+    service_cost = Column(DECIMAL(12, 2), nullable=True, default=0)
+    cost_currency = Column(String(10), nullable=True, default="NGN")
 
     sent_at = Column(
         DateTime(timezone=True),

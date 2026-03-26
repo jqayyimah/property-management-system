@@ -15,6 +15,11 @@ export const signup = (data: {
   password: string;
 }) => api.post<{ message: string }>('/auth/signup', data).then((r) => r.data);
 
+export const verifyEmail = (token: string) =>
+  api.post<{ message: string }>('/auth/verify-email', undefined, {
+    params: { token },
+  }).then((r) => r.data);
+
 export const forgotPassword = (email: string) =>
   api.post<{ message: string }>('/auth/forgot-password', { email }).then((r) => r.data);
 

@@ -9,7 +9,7 @@ const emptyForm: TenantCreate = {
   full_name: '',
   email: '',
   phone: '',
-  apartment_id: undefined,
+  apartment_id: 0,
 };
 
 export default function Tenants() {
@@ -159,20 +159,23 @@ export default function Tenants() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Apartment (optional)</label>
+              <label className="form-label">Apartment</label>
               <select
                 className="form-select"
-                value={form.apartment_id ?? ''}
+                value={form.apartment_id || ''}
                 onChange={(e) =>
                   setForm({
                     ...form,
                     apartment_id: e.target.value
                       ? Number(e.target.value)
-                      : undefined,
+                      : 0,
                   })
                 }
+                required
               >
-                <option value="">— None —</option>
+                <option value="" disabled>
+                  Select an apartment
+                </option>
                 {vacantApartments.map((a) => {
                   const house = houseMap[a.house_id];
                   return (

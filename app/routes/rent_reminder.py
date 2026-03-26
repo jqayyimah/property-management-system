@@ -16,6 +16,7 @@ from app.schemas.reminder import (
     ReminderLogResponse,
 )
 from app.services import reminder_service
+from app.services.audit_service import create_audit_log
 from app.models.rent_reminder_log import RentReminderLog
 
 router = APIRouter(prefix="/rent-reminders", tags=["Rent Reminders"])
@@ -60,7 +61,20 @@ def trigger_reminders(
     db: Session = Depends(get_db),
     user: dict = Depends(require_admin_or_landlord),
 ):
-    sent = reminder_service.run_reminders(db, landlord_id=_landlord_id(user))
+    try:
+        sent = reminder_service.run_reminders(db, landlord_id=_landlord_id(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    create_audit_log(
+        db,
+        action="REMINDERS_TRIGGERED",
+        entity_type="REMINDER_BATCH",
+        actor=user,
+        landlord_id=_landlord_id(user),
+        description="Rent reminders triggered manually",
+        details={"reminders_sent": sent},
+    )
+    db.commit()
     return TriggerResponse(success=True, reminders_sent=sent)
 
 
@@ -88,6 +102,16 @@ def update_message_template(
     reminder_service.save_reminder_template(
         db, body.message, landlord_id=_landlord_id(user)
     )
+    create_audit_log(
+        db,
+        action="REMINDER_TEMPLATE_UPDATED",
+        entity_type="REMINDER_SETTINGS",
+        actor=user,
+        landlord_id=_landlord_id(user),
+        description="Reminder message template updated",
+        details={"message_preview": body.message[:120]},
+    )
+    db.commit()
     return ReminderMessageResponse(message=body.message)
 
 
@@ -105,12 +129,22 @@ def get_channels(
 def update_channels(
     body: ReminderChannelsUpdate,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_admin_or_landlord),
+    user: dict = Depends(require_admin_or_landlord),
 ):
     try:
         channels = reminder_service.save_enabled_channels(db, body.channels)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    create_audit_log(
+        db,
+        action="REMINDER_CHANNELS_UPDATED",
+        entity_type="REMINDER_SETTINGS",
+        actor=user,
+        landlord_id=_landlord_id(user),
+        description="Reminder channels updated",
+        details={"channels": channels},
+    )
+    db.commit()
     return ReminderChannelsResponse(channels=channels)
 
 
@@ -118,7 +152,7 @@ def update_channels(
 def test_send_reminder(
     body: TestReminderRequest,
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_admin),
+    user: dict = Depends(require_admin),
 ):
     sent_channels = reminder_service.send_test_reminder(
         db,
@@ -131,6 +165,16 @@ def test_send_reminder(
             status_code=400,
             detail="No enabled reminder channels could be sent. Provide email or phone as needed.",
         )
+
+    create_audit_log(
+        db,
+        action="TEST_REMINDER_SENT",
+        entity_type="REMINDER_TEST",
+        actor=user,
+        description="Admin sent test reminder",
+        details={"sent_channels": sent_channels},
+    )
+    db.commit()
 
     return TestReminderResponse(
         message="Test reminder sent successfully",
@@ -162,4 +206,25 @@ def get_reminder_logs(
             .filter(House.landlord_id == landlord_id)
         )
 
-    return q.limit(limit).all()
+    logs = q.limit(limit).all()
+    return [
+        ReminderLogResponse(
+            id=log.id,
+            rent_id=log.rent_id,
+            tenant_id=log.tenant_id,
+            tenant_name=log.tenant.full_name if log.tenant else None,
+            landlord_name=(
+                log.tenant.apartment.house.landlord.full_name
+                if log.tenant and log.tenant.apartment and log.tenant.apartment.house
+                else None
+            ),
+            reminder_type=log.reminder_type,
+            message=log.message,
+            status=log.status,
+            channel_used=log.channel_used,
+            service_cost=log.service_cost,
+            cost_currency=log.cost_currency,
+            sent_at=log.sent_at,
+        )
+        for log in logs
+    ]

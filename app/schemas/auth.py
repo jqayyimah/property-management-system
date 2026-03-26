@@ -9,6 +9,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    is_email_verified: bool
     landlord_id: Optional[int] = None
 
     # 👤 Added

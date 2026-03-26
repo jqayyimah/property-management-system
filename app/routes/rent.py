@@ -12,6 +12,7 @@ from app.schemas.rent import (
     RentUpdate,
     RentResponse,
 )
+from app.services.audit_service import create_audit_log
 
 
 router = APIRouter(prefix="/rents", tags=["Rents"])
@@ -73,6 +74,23 @@ def create_rent(
     )
 
     db.add(rent)
+    db.flush()
+    create_audit_log(
+        db,
+        action="RENT_CREATED",
+        entity_type="RENT",
+        entity_id=rent.id,
+        actor=user,
+        landlord_id=tenant.apartment.house.landlord_id,
+        description="Rent record created",
+        details={
+            "tenant_id": tenant.id,
+            "year": payload.year,
+            "start_date": payload.start_date,
+            "end_date": payload.end_date,
+            "amount": payload.amount,
+        },
+    )
     db.commit()
     db.refresh(rent)
 
@@ -112,6 +130,20 @@ def pay_rent(
     rent.paid_amount += payment
     rent.status = "PAID" if rent.paid_amount >= rent.amount else "PARTIAL"
 
+    create_audit_log(
+        db,
+        action="RENT_PAYMENT_RECORDED",
+        entity_type="RENT",
+        entity_id=rent.id,
+        actor=user,
+        landlord_id=rent.tenant.apartment.house.landlord_id,
+        description="Rent payment recorded",
+        details={
+            "payment_amount": payload.amount,
+            "paid_amount": rent.paid_amount,
+            "status": rent.status,
+        },
+    )
     db.commit()
     db.refresh(rent)
 
@@ -223,6 +255,16 @@ def update_rent(
     for field, value in data.items():
         setattr(rent, field, value)
 
+    create_audit_log(
+        db,
+        action="RENT_UPDATED",
+        entity_type="RENT",
+        entity_id=rent.id,
+        actor=user,
+        landlord_id=rent.tenant.apartment.house.landlord_id,
+        description="Rent record updated",
+        details=data,
+    )
     db.commit()
     db.refresh(rent)
 

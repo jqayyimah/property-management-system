@@ -7,7 +7,7 @@ class TenantCreate(BaseModel):
     full_name: str
     email: EmailStr   # 🔐 mandatory
     phone: str
-    apartment_id: Optional[int] = None
+    apartment_id: int
 
 
 class TenantUpdate(BaseModel):

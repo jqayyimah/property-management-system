@@ -101,7 +101,24 @@ def get_dashboard_summary(
     ]
 
     reminder_rows = [
-        ReminderLogResponse.model_validate(log)
+        ReminderLogResponse(
+            id=log.id,
+            rent_id=log.rent_id,
+            tenant_id=log.tenant_id,
+            tenant_name=log.tenant.full_name if log.tenant else None,
+            landlord_name=(
+                log.tenant.apartment.house.landlord.full_name
+                if log.tenant and log.tenant.apartment and log.tenant.apartment.house
+                else None
+            ),
+            reminder_type=log.reminder_type,
+            message=log.message,
+            status=log.status,
+            channel_used=log.channel_used,
+            service_cost=log.service_cost,
+            cost_currency=log.cost_currency,
+            sent_at=log.sent_at,
+        )
         for log in reminders_query.limit(5).all()
     ]
 

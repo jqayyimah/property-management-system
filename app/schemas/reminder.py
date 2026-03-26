@@ -61,10 +61,14 @@ class ReminderLogResponse(BaseModel):
     id: int
     rent_id: int
     tenant_id: int
+    tenant_name: Optional[str] = None
+    landlord_name: Optional[str] = None
     reminder_type: str
     message: str
     status: str
     channel_used: Optional[str] = None
+    service_cost: Optional[Decimal] = None
+    cost_currency: Optional[str] = None
     sent_at: datetime
 
     model_config = {"from_attributes": True}

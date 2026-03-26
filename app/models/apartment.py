@@ -53,7 +53,7 @@ class Apartment(Base):
         nullable=False
     )
 
-    house_id = Column(Integer, ForeignKey("houses.id"), nullable=False)
+    house_id = Column(Integer, ForeignKey("houses.id"), nullable=False, index=True)
     is_vacant = Column(Boolean, default=True)
 
     house = relationship("House", back_populates="apartments")

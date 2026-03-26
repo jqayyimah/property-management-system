@@ -9,12 +9,45 @@ import {
 } from '../services/reminderService';
 import { ReminderChannel } from '../types';
 
-const CHANNEL_OPTIONS: Array<{ value: ReminderChannel; label: string }> = [
-  { value: 'sms', label: 'SMS' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'email', label: 'Email' },
-  { value: 'dashboard', label: 'Dashboard' },
+const CHANNEL_OPTIONS: Array<{
+  value: ReminderChannel;
+  label: string;
+  icon: string;
+  description: string;
+}> = [
+  {
+    value: 'sms',
+    label: 'SMS',
+    icon: '📩',
+    description: 'Fast tenant text reminders using saved phone numbers.',
+  },
+  {
+    value: 'whatsapp',
+    label: 'WhatsApp',
+    icon: '💬',
+    description: 'Conversational reminder delivery through WhatsApp.',
+  },
+  {
+    value: 'email',
+    label: 'Email',
+    icon: '✉️',
+    description: 'Best for richer layouts and branded reminder messages.',
+  },
+  {
+    value: 'dashboard',
+    label: 'Dashboard',
+    icon: '📊',
+    description: 'Internal in-app reminder logs visible from the platform.',
+  },
 ];
+
+const PREVIEW_VALUES: Record<string, string> = {
+  tenant_name: 'Barbie Roberts',
+  property_name: 'West End Residences',
+  apartment: '2 Bedroom - Flat B2',
+  amount: '₦1,000,000.00',
+  due_date: '2026-03-31',
+};
 
 export default function ReminderConfig() {
   const { isAdmin } = useAuth();
@@ -29,6 +62,11 @@ export default function ReminderConfig() {
   const [testEmail, setTestEmail] = useState('');
   const [testPhone, setTestPhone] = useState('');
   const [testStatus, setTestStatus] = useState('');
+
+  const previewMessage = template.replace(
+    /\{(tenant_name|property_name|apartment|amount|due_date)\}/g,
+    (_, key: keyof typeof PREVIEW_VALUES) => PREVIEW_VALUES[key] ?? `{${key}}`
+  );
 
   useEffect(() => {
     getMessageTemplate().then((msg) => {
@@ -93,26 +131,32 @@ export default function ReminderConfig() {
 
   return (
     <div className="config-card">
-      <h2 className="config-title">Reminder Channels</h2>
-      <p className="config-hint">
-        Choose where due reminders should be delivered.
-      </p>
+      <div className="section-header">
+        <div>
+          <h2 className="config-title">Reminder Channels</h2>
+          <p className="config-hint">
+            Choose which channels send rent alerts for this landlord account.
+          </p>
+        </div>
+        <span className="badge badge-vacant">{channels.length} active</span>
+      </div>
       <p className="config-hint">
         SMS and WhatsApp use the tenant phone number, Email uses the tenant email,
-        and Dashboard logs an in-app notification without external delivery.
+        and Dashboard creates an in-app record without external delivery.
       </p>
 
-      <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1rem' }}>
+      <div className="toggle-grid">
         {CHANNEL_OPTIONS.map((option) => {
           const checked = channels.includes(option.value);
           return (
             <label
               key={option.value}
-              style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+              className={`toggle-card ${checked ? 'is-active' : ''}`}
             >
               <input
                 type="checkbox"
                 checked={checked}
+                style={{ display: 'none' }}
                 onChange={(e) => {
                   setStatus('idle');
                   setErrorMessage('');
@@ -123,44 +167,71 @@ export default function ReminderConfig() {
                   );
                 }}
               />
-              <span>{option.label}</span>
+              <span className="toggle-icon" aria-hidden="true">
+                {option.icon}
+              </span>
+              <span className="toggle-content">
+                <span className="toggle-title">{option.label}</span>
+                <span className="toggle-desc">{option.description}</span>
+              </span>
+              <span className="toggle-switch" aria-hidden="true" />
             </label>
           );
         })}
       </div>
 
-      <h2 className="config-title">Reminder Message Template</h2>
-      <p className="config-hint">
-        Supported variables:{' '}
-        <code>
-          {'{tenant_name}'} {'{property_name}'} {'{apartment}'} {'{amount}'}{' '}
-          {'{due_date}'}
-        </code>
-      </p>
-      <p className="config-hint">
-        HTML is supported for email rendering. SMS, WhatsApp, and dashboard reminders
-        are automatically converted to clean plain text.
-      </p>
+      <div className="divider" />
 
-      <textarea
-        className="config-textarea"
-        value={template}
-        onChange={(e) => {
-          setTemplate(e.target.value);
-          setStatus('idle');
-        }}
-        rows={6}
-        placeholder="Loading..."
-      />
+      <div className="section-header">
+        <div>
+          <h2 className="config-title">Reminder Message Template</h2>
+          <p className="config-hint">
+            Write the base message once. Email can render HTML while SMS,
+            WhatsApp, and dashboard alerts are converted to clean plain text.
+          </p>
+        </div>
+        <span className="badge badge-occupied">Live preview enabled</span>
+      </div>
+      <div className="token-list">
+        <span className="token-pill">{'{tenant_name}'}</span>
+        <span className="token-pill">{'{property_name}'}</span>
+        <span className="token-pill">{'{apartment}'}</span>
+        <span className="token-pill">{'{amount}'}</span>
+        <span className="token-pill">{'{due_date}'}</span>
+      </div>
+
+      <div className="template-grid">
+        <div>
+          <textarea
+            className="config-textarea"
+            value={template}
+            onChange={(e) => {
+              setTemplate(e.target.value);
+              setStatus('idle');
+            }}
+            rows={8}
+            placeholder="Loading..."
+          />
+        </div>
+        <div className="preview-card">
+          <div className="preview-title">Message Preview</div>
+          <div className="preview-subtitle">
+            Sample render using placeholder values for a due rent notice.
+          </div>
+          <div className="preview-body">{previewMessage}</div>
+        </div>
+      </div>
 
       {status === 'saved' && (
-        <div className="config-success">Template saved.</div>
+        <div className="config-success">Reminder settings saved successfully.</div>
       )}
       {status === 'error' && (
-        <div className="error-msg">{errorMessage || 'Failed to save reminder settings.'}</div>
+        <div className="error-msg">
+          {errorMessage || 'Failed to save reminder settings.'}
+        </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+      <div className="config-actions">
         <button
           className="btn btn-primary"
           onClick={handleSave}
@@ -181,32 +252,43 @@ export default function ReminderConfig() {
             Discard
           </button>
         )}
+        <span className="character-count">{template.length} characters</span>
       </div>
 
       {isAdmin && (
         <div style={{ marginTop: '2rem' }}>
+          <div className="divider" />
           <h2 className="config-title">Test Send Reminder</h2>
           <p className="config-hint">
-            Admin only. Send a test reminder using the currently enabled channels.
+            Admin only. Send a test reminder using the currently enabled channels
+            before the scheduler runs.
           </p>
-          <div className="form-group">
-            <label className="form-label">Test Email</label>
-            <input
-              type="email"
-              className="form-input"
-              value={testEmail}
-              onChange={(e) => setTestEmail(e.target.value)}
-              placeholder="Optional for email channel"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Test Phone</label>
-            <input
-              className="form-input"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="Optional for SMS / WhatsApp channels"
-            />
+          <div className="test-send-grid">
+            <div className="form-group">
+              <label className="form-label">Test Email</label>
+              <input
+                type="email"
+                className="form-input"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Optional for email channel"
+              />
+              <div className="form-hint">
+                Leave blank if email is not one of the selected channels.
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Test Phone</label>
+              <input
+                className="form-input"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="Optional for SMS / WhatsApp channels"
+              />
+              <div className="form-hint">
+                Required when testing SMS or WhatsApp delivery.
+              </div>
+            </div>
           </div>
           <button
             type="button"

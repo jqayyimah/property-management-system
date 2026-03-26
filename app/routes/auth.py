@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
-from datetime import datetime
+from datetime import datetime, timedelta
+import secrets
 
 from app.config.settings import settings
 from app.database import get_db
@@ -24,13 +25,22 @@ from app.auth.dependencies import get_current_user
 from app.auth.reset import generate_reset_token
 
 from app.services.email_service import send_email
+from app.services.audit_service import create_audit_log
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+EMAIL_VERIFICATION_TTL_HOURS = 24
+
+
+def _generate_email_verification_token():
+    token = secrets.token_urlsafe(32)
+    expiry = datetime.utcnow() + timedelta(hours=EMAIL_VERIFICATION_TTL_HOURS)
+    return token, expiry
 
 
 # -------------------------------------------------------------------
 # LANDLORD SIGNUP
 # -------------------------------------------------------------------
+
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def landlord_signup(
@@ -56,14 +66,84 @@ def landlord_signup(
         password_hash=hash_password(payload.password),
         role=UserRole.LANDLORD,
         is_active=False,          # 🔒 admin activation required
+        is_email_verified=False,
         landlord_id=landlord.id,
     )
+    token, expiry = _generate_email_verification_token()
+    user.email_verification_token = token
+    user.email_verification_token_expiry = expiry
 
     db.add(user)
+    db.flush()
+    create_audit_log(
+        db,
+        action="LANDLORD_SIGNUP",
+        entity_type="USER",
+        entity_id=user.id,
+        actor_role="PUBLIC",
+        landlord_id=landlord.id,
+        description="New landlord account created during signup",
+        details={"email": user.email, "landlord_id": landlord.id},
+    )
+    db.commit()
+
+    verification_link = f"{settings.FRONTEND_BASE_URL}/auth/verify-email?token={token}"
+    send_email(
+        to_email=user.email,
+        subject="Verify your email address",
+        body=f"""
+        <p>Hello {payload.full_name},</p>
+        <p>Thanks for signing up for Property Management.</p>
+        <p>Please verify your email address to complete your landlord signup.</p>
+        <p>
+            <a href="{verification_link}">
+                Verify my email
+            </a>
+        </p>
+        <p>This link expires in {EMAIL_VERIFICATION_TTL_HOURS} hours.</p>
+        <p>After verification, your account will still require admin activation before you can log in.</p>
+        """,
+    )
+
+    return {
+        "message": "Signup successful. Check your email to verify your account, then await admin activation.",
+    }
+
+
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
+def verify_email(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email_verification_token == token).first()
+
+    if (
+        not user
+        or not user.email_verification_token_expiry
+        or user.email_verification_token_expiry < datetime.utcnow()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification token",
+        )
+
+    user.is_email_verified = True
+    user.email_verification_token = None
+    user.email_verification_token_expiry = None
+    create_audit_log(
+        db,
+        action="EMAIL_VERIFIED",
+        entity_type="USER",
+        entity_id=user.id,
+        actor={"id": user.id, "role": user.role.value, "landlord_id": user.landlord_id},
+        landlord_id=user.landlord_id,
+        description="User verified email address",
+        details={"email": user.email},
+    )
     db.commit()
 
     return {
-        "message": "Signup successful. Await admin activation.",
+        "message": "Email verified successfully. Await admin activation if your account is still pending.",
     }
 
 
@@ -71,10 +151,11 @@ def landlord_signup(
 # ACTIVATE LANDLORD (ADMIN ONLY)
 # -------------------------------------------------------------------
 
-@router.post("/activate/{user_id}", dependencies=[Depends(require_admin)])
+@router.post("/activate/{user_id}")
 def activate_landlord(
     user_id: int,
     db: Session = Depends(get_db),
+    actor=Depends(require_admin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -86,6 +167,16 @@ def activate_landlord(
 
     # Activate account
     user.is_active = True
+    create_audit_log(
+        db,
+        action="LANDLORD_ACTIVATED",
+        entity_type="USER",
+        entity_id=user.id,
+        actor=actor,
+        landlord_id=user.landlord_id,
+        description="Admin activated landlord account",
+        details={"email": user.email},
+    )
     db.commit()
     db.refresh(user)
 
@@ -121,10 +212,11 @@ def activate_landlord(
     }
 
 
-@router.post("/deactivate/{user_id}", dependencies=[Depends(require_admin)])
+@router.post("/deactivate/{user_id}")
 def deactivate_landlord(
     user_id: int,
     db: Session = Depends(get_db),
+    actor=Depends(require_admin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -132,6 +224,16 @@ def deactivate_landlord(
         raise HTTPException(404, "Landlord user not found")
 
     user.is_active = False
+    create_audit_log(
+        db,
+        action="LANDLORD_DEACTIVATED",
+        entity_type="USER",
+        entity_id=user.id,
+        actor=actor,
+        landlord_id=user.landlord_id,
+        description="Admin deactivated landlord account",
+        details={"email": user.email},
+    )
     db.commit()
     db.refresh(user)
 
@@ -158,6 +260,12 @@ def login(
             detail="Invalid email or password",
         )
 
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before logging in",
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -172,6 +280,18 @@ def login(
             "landlord_id": user.landlord_id,
         }
     )
+
+    create_audit_log(
+        db,
+        action="LOGIN_SUCCESS",
+        entity_type="USER",
+        entity_id=user.id,
+        actor={"id": user.id, "role": user.role.value, "landlord_id": user.landlord_id},
+        landlord_id=user.landlord_id,
+        description="User logged in successfully",
+        details={"email": user.email},
+    )
+    db.commit()
 
     return {
         "access_token": token,
@@ -210,6 +330,16 @@ def forgot_password(
         token, expiry = generate_reset_token()
         user.reset_token = token
         user.reset_token_expiry = expiry
+        create_audit_log(
+            db,
+            action="PASSWORD_RESET_REQUESTED",
+            entity_type="USER",
+            entity_id=user.id,
+            actor={"id": user.id, "role": user.role.value, "landlord_id": user.landlord_id},
+            landlord_id=user.landlord_id,
+            description="User requested password reset",
+            details={"email": user.email},
+        )
         db.commit()
 
         reset_link = f"{settings.FRONTEND_BASE_URL}/auth/reset-password?token={token}"
@@ -269,6 +399,16 @@ def reset_password(
     user.password_hash = hash_password(payload.new_password)
     user.reset_token = None
     user.reset_token_expiry = None
+    create_audit_log(
+        db,
+        action="PASSWORD_RESET_COMPLETED",
+        entity_type="USER",
+        entity_id=user.id,
+        actor={"id": user.id, "role": user.role.value, "landlord_id": user.landlord_id},
+        landlord_id=user.landlord_id,
+        description="User completed password reset",
+        details={"email": user.email},
+    )
 
     db.commit()
 
@@ -302,6 +442,16 @@ def change_password(
         )
 
     user.password_hash = hash_password(payload.new_password)
+    create_audit_log(
+        db,
+        action="PASSWORD_CHANGED",
+        entity_type="USER",
+        entity_id=user.id,
+        actor=current_user,
+        landlord_id=user.landlord_id,
+        description="Authenticated user changed password",
+        details={"email": user.email},
+    )
     db.commit()
 
     return {"message": "Password changed successfully"}
@@ -314,7 +464,18 @@ def change_password(
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout(
     current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    create_audit_log(
+        db,
+        action="LOGOUT",
+        entity_type="USER",
+        entity_id=current_user["id"],
+        actor=current_user,
+        landlord_id=current_user.get("landlord_id"),
+        description="User logged out",
+    )
+    db.commit()
     return {
         "message": "Logged out successfully"
     }
@@ -352,6 +513,7 @@ def get_current_logged_in_user(
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
+        "is_email_verified": user.is_email_verified,
         "landlord_id": user.landlord_id,
         "full_name": full_name,
         "first_name": first_name,

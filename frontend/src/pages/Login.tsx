@@ -2,6 +2,8 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+type ApiErr = { response?: { data?: { detail?: string } } };
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -18,12 +20,23 @@ export default function Login() {
       await login(email, password);
       navigate('/');
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : (err as { response?: { data?: { detail?: string } } })?.response
-              ?.data?.detail ?? 'Invalid credentials';
-      setError(msg);
+      const apiMessage = (err as ApiErr)?.response?.data?.detail;
+
+      if (apiMessage === 'User account is inactive') {
+        setError(
+          'Your landlord account is pending admin approval. You will be able to sign in once an administrator activates it.'
+        );
+      } else if (apiMessage === 'Please verify your email address before logging in') {
+        setError(
+          'Your email address has not been verified yet. Check your inbox and click the verification link before signing in.'
+        );
+      } else if (apiMessage) {
+        setError(apiMessage);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Invalid credentials');
+      }
     } finally {
       setLoading(false);
     }

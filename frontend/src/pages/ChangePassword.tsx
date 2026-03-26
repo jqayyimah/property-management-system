@@ -37,16 +37,33 @@ export default function ChangePassword() {
   };
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Settings</h1>
+    <div className="page-shell">
+      <div className="page-hero">
+        <div className="page-hero-content">
+          <span className="page-kicker">Preferences</span>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-subtitle">
+            Keep your account secure by updating your password from a single
+            protected settings panel.
+          </p>
+        </div>
+        <div className="page-actions">
+          <span className="badge badge-vacant">Security</span>
+        </div>
       </div>
 
-      <div className="table-container" style={{ maxWidth: 560 }}>
-        <h2 className="section-title">Change Password</h2>
+      <div className="card" style={{ maxWidth: 720 }}>
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Change Password</h2>
+            <p className="section-subtitle">
+              Use a strong password with at least 8 characters.
+            </p>
+          </div>
+        </div>
         {error && <div className="error-msg">{error}</div>}
         {success && <div className="config-success">{success}</div>}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="form-grid">
           <div className="form-group">
             <label className="form-label">Current Password</label>
             <input
@@ -67,6 +84,9 @@ export default function ChangePassword() {
               minLength={8}
               required
             />
+            <div className="form-hint">
+              Choose something memorable and hard to guess.
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">Confirm New Password</label>
@@ -79,9 +99,11 @@ export default function ChangePassword() {
               required
             />
           </div>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Updating...' : 'Update password'}
-          </button>
+          <div className="page-actions">
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

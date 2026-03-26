@@ -53,12 +53,18 @@ export default function Signup() {
 
   return (
     <div className="login-container">
-      <div className="login-card">
+      <div className="login-card signup-card">
         <h1 className="login-title">Create Account</h1>
         <p className="login-subtitle">Register as a landlord</p>
         {error && <div className="error-msg">{error}</div>}
-        {success && <div className="config-success">{success}</div>}
-        <form onSubmit={handleSubmit}>
+        {success ? (
+          <div className="config-success">{success}</div>
+        ) : (
+          <>
+          <div className="info-banner">
+            Create your account here
+          </div>
+          <form onSubmit={handleSubmit} className="form-grid signup-form">
           <div className="form-group">
             <label className="form-label">Full Name</label>
             <input
@@ -117,7 +123,9 @@ export default function Signup() {
           >
             {loading ? 'Creating account...' : 'Sign up'}
           </button>
-        </form>
+          </form>
+          </>
+        )}
         <div style={{ marginTop: '1rem', textAlign: 'center' }}>
           <Link to="/login">Back to login</Link>
         </div>

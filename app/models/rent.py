@@ -6,6 +6,7 @@ from sqlalchemy import (
     String,
     DateTime,
     ForeignKey,
+    Index,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -18,6 +19,7 @@ class Rent(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "year", name="uq_tenant_year"),
+        Index("ix_rents_status_end_date", "status", "end_date"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -32,12 +34,12 @@ class Rent(Base):
     year = Column(Integer, nullable=False)
 
     start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False, index=True)
 
     amount = Column(DECIMAL(12, 2), nullable=False)
     paid_amount = Column(DECIMAL(12, 2), default=0)
 
-    status = Column(String(20), default="UNPAID")
+    status = Column(String(20), default="UNPAID", index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

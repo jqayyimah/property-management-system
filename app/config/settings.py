@@ -31,6 +31,12 @@ class Settings(BaseModel):
     TERMII_SENDER_ID: str | None = None
     TERMII_WHATSAPP_SENDER_ID: str | None = None
 
+    # 💳 Flutterwave billing
+    FLW_SECRET_KEY: str | None = None
+    FLW_PUBLIC_KEY: str | None = None
+    FLW_BASE_URL: str = "https://api.flutterwave.com/v3"
+    FLW_CURRENCY: str = "NGN"
+
 
 settings = Settings(
     JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY"),
@@ -44,6 +50,10 @@ settings = Settings(
     TERMII_API_KEY=os.getenv("TERMII_API_KEY"),
     TERMII_SENDER_ID=os.getenv("TERMII_SENDER_ID"),
     TERMII_WHATSAPP_SENDER_ID=os.getenv("TERMII_WHATSAPP_SENDER_ID"),
+    FLW_SECRET_KEY=os.getenv("FLW_SECRET_KEY"),
+    FLW_PUBLIC_KEY=os.getenv("FLW_PUBLIC_KEY"),
+    FLW_BASE_URL=os.getenv("FLW_BASE_URL") or "https://api.flutterwave.com/v3",
+    FLW_CURRENCY=os.getenv("FLW_CURRENCY") or "NGN",
 )
 
 if not settings.JWT_SECRET_KEY:

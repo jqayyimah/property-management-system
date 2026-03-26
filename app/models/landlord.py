@@ -24,3 +24,15 @@ class Landlord(Base):
         back_populates="landlord",
         cascade="all, delete-orphan",
     )
+
+    subscriptions = relationship(
+        "LandlordSubscription",
+        back_populates="landlord",
+        cascade="all, delete-orphan",
+    )
+
+    payment_transactions = relationship(
+        "PaymentTransaction",
+        back_populates="landlord",
+        cascade="all, delete-orphan",
+    )

@@ -10,6 +10,7 @@ from app.schemas.apartment import (
     ApartmentUpdate,
     ApartmentResponse,
 )
+from app.services.audit_service import create_audit_log
 
 router = APIRouter(
     prefix="/apartments",
@@ -57,6 +58,21 @@ def create_apartment(
     )
 
     db.add(apartment)
+    db.flush()
+    create_audit_log(
+        db,
+        action="APARTMENT_CREATED",
+        entity_type="APARTMENT",
+        entity_id=apartment.id,
+        actor=user,
+        landlord_id=house.landlord_id,
+        description="Apartment created",
+        details={
+            "unit_number": apartment.unit_number,
+            "apartment_type": apartment.apartment_type,
+            "house_id": apartment.house_id,
+        },
+    )
     db.commit()
     db.refresh(apartment)
     return apartment
@@ -127,6 +143,16 @@ def update_apartment(
     for field, value in data.items():
         setattr(apartment, field, value)
 
+    create_audit_log(
+        db,
+        action="APARTMENT_UPDATED",
+        entity_type="APARTMENT",
+        entity_id=apartment.id,
+        actor=user,
+        landlord_id=apartment.house.landlord_id,
+        description="Apartment updated",
+        details=data,
+    )
     db.commit()
     db.refresh(apartment)
     return apartment
@@ -161,6 +187,16 @@ def delete_apartment(
             detail="Apartment is not vacant",
         )
 
+    create_audit_log(
+        db,
+        action="APARTMENT_DELETED",
+        entity_type="APARTMENT",
+        entity_id=apartment.id,
+        actor=user,
+        landlord_id=apartment.house.landlord_id,
+        description="Apartment deleted",
+        details={"unit_number": apartment.unit_number, "house_id": apartment.house_id},
+    )
     db.delete(apartment)
     db.commit()
 

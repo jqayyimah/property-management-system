@@ -12,6 +12,7 @@ from app.schemas.tenant import (
     TenantUpdate,
     TenantResponse,
 )
+from app.services.audit_service import create_audit_log
 
 router = APIRouter(
     prefix="/tenants",
@@ -78,6 +79,21 @@ def create_tenant(
         apartment.is_vacant = False
 
     db.add(tenant)
+    db.flush()
+    create_audit_log(
+        db,
+        action="TENANT_CREATED",
+        entity_type="TENANT",
+        entity_id=tenant.id,
+        actor=user,
+        landlord_id=apartment.house.landlord_id if apartment else user.get("landlord_id"),
+        description="Tenant created",
+        details={
+            "full_name": tenant.full_name,
+            "email": tenant.email,
+            "apartment_id": tenant.apartment_id,
+        },
+    )
     db.commit()
     db.refresh(tenant)
 
@@ -166,6 +182,16 @@ def update_tenant(
     for field, value in data.items():
         setattr(tenant, field, value)
 
+    create_audit_log(
+        db,
+        action="TENANT_UPDATED",
+        entity_type="TENANT",
+        entity_id=tenant.id,
+        actor=user,
+        landlord_id=tenant.apartment.house.landlord_id if tenant.apartment else user.get("landlord_id"),
+        description="Tenant updated",
+        details=data,
+    )
     db.commit()
     db.refresh(tenant)
     return tenant
@@ -198,6 +224,16 @@ def tenant_exit(
     apartment.is_vacant = True
     tenant.apartment_id = None
 
+    create_audit_log(
+        db,
+        action="TENANT_EXITED",
+        entity_type="TENANT",
+        entity_id=tenant.id,
+        actor=user,
+        landlord_id=apartment.house.landlord_id,
+        description="Tenant exited apartment",
+        details={"apartment_id": apartment.id},
+    )
     db.commit()
 
     return {
@@ -230,6 +266,16 @@ def delete_tenant(
     if tenant.apartment:
         tenant.apartment.is_vacant = True
 
+    create_audit_log(
+        db,
+        action="TENANT_DELETED",
+        entity_type="TENANT",
+        entity_id=tenant.id,
+        actor=user,
+        landlord_id=tenant.apartment.house.landlord_id if tenant.apartment else None,
+        description="Tenant deleted",
+        details={"full_name": tenant.full_name, "email": tenant.email},
+    )
     db.delete(tenant)
     db.commit()
 

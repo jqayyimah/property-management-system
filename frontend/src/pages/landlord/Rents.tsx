@@ -8,8 +8,12 @@ import {
 } from '../../services/rentService';
 import { getTenants } from '../../services/tenantService';
 import Modal from '../../components/Modal';
+import Pagination from '../../components/Pagination';
+import { getApiErrorMessage, isValidCurrencyInput } from '../../utils/apiError';
+import { useAuth } from '../../context/AuthContext';
+import PlanRestrictedSection from '../../components/PlanRestrictedSection';
 
-type ApiErr = { response?: { data?: { detail?: string } } };
+const ITEMS_PER_PAGE = 10;
 
 const currentYear = new Date().getFullYear();
 
@@ -37,7 +41,38 @@ function statusClass(status: string, endDate: string): string {
 const fmt = (n: string | number) =>
   Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+function validateCreateRentForm(form: RentCreate, amount: string): string | null {
+  if (!form.tenant_id) {
+    return 'Select a tenant before creating rent.';
+  }
+
+  if (!form.start_date || !form.end_date) {
+    return 'Choose both start date and end date.';
+  }
+
+  const startDate = new Date(form.start_date);
+  const endDate = new Date(form.end_date);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return 'Enter valid rent dates.';
+  }
+
+  if (startDate >= endDate) {
+    return 'Start date must be earlier than end date.';
+  }
+
+  if (startDate.getFullYear() !== Number(form.year)) {
+    return 'Rent year must match the start date year.';
+  }
+
+  if (!isValidCurrencyInput(amount) || Number(amount) <= 0) {
+    return 'Amount must be a valid currency value with up to 10 digits and 2 decimal places.';
+  }
+
+  return null;
+}
+
 export default function Rents() {
+  const { billingRestricted, billingLoading } = useAuth();
   const [rents, setRents] = useState<Rent[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +82,12 @@ export default function Rents() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRent, setSelectedRent] = useState<Rent | null>(null);
   const [form, setForm] = useState<RentCreate>(emptyForm);
+  const [createAmount, setCreateAmount] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
   const tenantMap = Object.fromEntries(tenants.map((t) => [t.id, t]));
 
@@ -58,6 +96,7 @@ export default function Rents() {
       const [rntList, tntList] = await Promise.all([getRents(), getTenants()]);
       setRents(rntList);
       setTenants(tntList);
+      setPage(1);
     } catch {
       setError('Failed to load data');
     } finally {
@@ -65,10 +104,32 @@ export default function Rents() {
     }
   };
 
+  const filteredRents = rents.filter((rent) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    const tenant = tenantMap[rent.tenant_id];
+    return (
+      tenant?.full_name?.toLowerCase().includes(query) ||
+      tenant?.email?.toLowerCase().includes(query) ||
+      rent.property?.name?.toLowerCase().includes(query) ||
+      String(rent.year).includes(query) ||
+      effectiveStatus(rent.status, rent.end_date).toLowerCase().includes(query)
+    );
+  });
+  const sortedRents = [...filteredRents].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  const totalPages = Math.max(1, Math.ceil(sortedRents.length / ITEMS_PER_PAGE));
+  const paginatedRents = sortedRents.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
+
   useEffect(() => { load(); }, []);
 
   const openCreate = () => {
     setForm(emptyForm);
+    setCreateAmount('');
     setError('');
     setShowCreateModal(true);
   };
@@ -91,12 +152,18 @@ export default function Rents() {
     e.preventDefault();
     setSubmitting(true);
     setError('');
+    const validationError = validateCreateRentForm(form, createAmount);
+    if (validationError) {
+      setError(validationError);
+      setSubmitting(false);
+      return;
+    }
     try {
-      await createRent(form);
+      await createRent({ ...form, amount: Number(createAmount) });
       setShowCreateModal(false);
-      load();
+      void load();
     } catch (err: unknown) {
-      setError((err as ApiErr)?.response?.data?.detail ?? 'Failed to create rent');
+      setError(getApiErrorMessage(err, 'Failed to create rent'));
     } finally {
       setSubmitting(false);
     }
@@ -107,12 +174,17 @@ export default function Rents() {
     if (!selectedRent) return;
     setSubmitting(true);
     setError('');
+    if (!isValidCurrencyInput(payAmount) || Number(payAmount) <= 0) {
+      setError('Payment amount must be a valid currency value with up to 10 digits and 2 decimal places.');
+      setSubmitting(false);
+      return;
+    }
     try {
       await payRent(selectedRent.id, Number(payAmount));
       setShowPayModal(false);
-      load();
+      void load();
     } catch (err: unknown) {
-      setError((err as ApiErr)?.response?.data?.detail ?? 'Failed to record payment');
+      setError(getApiErrorMessage(err, 'Failed to record payment'));
     } finally {
       setSubmitting(false);
     }
@@ -123,106 +195,162 @@ export default function Rents() {
     if (!selectedRent) return;
     setSubmitting(true);
     setError('');
+    if (!isValidCurrencyInput(editAmount) || Number(editAmount) <= 0) {
+      setError('Rent amount must be a valid currency value with up to 10 digits and 2 decimal places.');
+      setSubmitting(false);
+      return;
+    }
     try {
       await updateRent(selectedRent.id, { amount: Number(editAmount) });
       setShowEditModal(false);
-      load();
+      void load();
     } catch (err: unknown) {
-      setError((err as ApiErr)?.response?.data?.detail ?? 'Failed to update rent');
+      setError(getApiErrorMessage(err, 'Failed to update rent'));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Rents</h1>
-        <button className="btn btn-primary" onClick={openCreate}>
-          + Add Rent
-        </button>
+    <div className="page-shell">
+      <div className="page-hero">
+        <div className="page-hero-content">
+          <span className="page-kicker">Collections</span>
+          <h1 className="page-title">Rents</h1>
+          <p className="page-subtitle">
+            Review rent cycles, outstanding balances, and payment progress in one
+            clean workspace.
+          </p>
+        </div>
+        <div className="page-actions">
+          <span className="badge badge-vacant">{rents.length} rent records</span>
+          <button
+            className="btn btn-primary"
+            onClick={openCreate}
+            disabled={billingLoading || billingRestricted}
+          >
+            + Add Rent
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="error-msg" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="error-msg" style={{ justifyContent: 'space-between' }}>
           <span>{error}</span>
           <button className="btn btn-secondary btn-sm" onClick={load}>Retry</button>
         </div>
       )}
 
       {loading ? (
-        <div className="loading">Loading...</div>
+        <div className="loading">Loading rent records...</div>
       ) : (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Tenant</th>
-                <th>Property</th>
-                <th>Year</th>
-                <th>Amount</th>
-                <th>Paid</th>
-                <th>Outstanding</th>
-                <th>Status</th>
-                <th>Due Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rents.length === 0 ? (
+        <PlanRestrictedSection restricted={billingRestricted}>
+          <div className="toolbar">
+            <div>
+              <div className="toolbar-title">Rent Register</div>
+              <div className="toolbar-meta">
+                Search by tenant, property, year, or payment status. Latest entries
+                appear first.
+              </div>
+            </div>
+            <div className="toolbar-group">
+              <div className="toolbar-search">
+                <input
+                  className="form-input"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search tenant, property, year, or status"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={9}>
-                    <div className="empty-state">No rent records yet</div>
-                  </td>
+                  <th>#</th>
+                  <th>Tenant</th>
+                  <th>Property</th>
+                  <th>Year</th>
+                  <th>Amount</th>
+                  <th>Paid</th>
+                  <th>Outstanding</th>
+                  <th>Status</th>
+                  <th>Due Date</th>
+                  <th></th>
                 </tr>
-              ) : (
-                rents.map((r) => {
-                  const tenant = tenantMap[r.tenant_id];
-                  const outstanding = Number(r.amount) - Number(r.paid_amount);
-                  const eff = effectiveStatus(r.status, r.end_date);
-                  return (
-                    <tr key={r.id}>
-                      <td style={{ fontWeight: 500 }}>
-                        {tenant?.full_name ?? `#${r.tenant_id}`}
-                      </td>
-                      <td>{r.property?.name ?? '—'}</td>
-                      <td>{r.year}</td>
-                      <td>₦{fmt(r.amount)}</td>
-                      <td>₦{fmt(r.paid_amount)}</td>
-                      <td>₦{fmt(outstanding)}</td>
-                      <td>
-                        <span className={`badge ${statusClass(r.status, r.end_date)}`}>
-                          {eff}
-                        </span>
-                      </td>
-                      <td>{r.end_date}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          {r.status !== 'PAID' && (
-                            <button
-                              className="btn btn-success btn-sm"
-                              onClick={() => openPay(r)}
-                            >
-                              Pay
-                            </button>
-                          )}
-                          {r.status !== 'PAID' && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => openEdit(r)}
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sortedRents.length === 0 ? (
+                  <tr>
+                    <td colSpan={10}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">💰</div>
+                        <strong>
+                          {search ? 'No rent records match your search' : 'No rent records yet'}
+                        </strong>
+                        {search
+                          ? 'Try another tenant, property, or status keyword.'
+                          : 'Create a rent record to begin tracking payments and due dates.'}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRents.map((r, index) => {
+                    const tenant = tenantMap[r.tenant_id];
+                    const outstanding = Number(r.amount) - Number(r.paid_amount);
+                    const eff = effectiveStatus(r.status, r.end_date);
+                    return (
+                      <tr key={r.id}>
+                        <td>{(page - 1) * ITEMS_PER_PAGE + index + 1}</td>
+                        <td>
+                          <span className="cell-title">
+                            {tenant?.full_name ?? `#${r.tenant_id}`}
+                          </span>
+                        </td>
+                        <td>{r.property?.name ?? '—'}</td>
+                        <td>{r.year}</td>
+                        <td>₦{fmt(r.amount)}</td>
+                        <td>₦{fmt(r.paid_amount)}</td>
+                        <td>₦{fmt(outstanding)}</td>
+                        <td>
+                          <span className={`badge ${statusClass(r.status, r.end_date)}`}>
+                            {eff}
+                          </span>
+                        </td>
+                        <td>{r.end_date}</td>
+                        <td>
+                          <div className="table-actions">
+                            {r.status !== 'PAID' && (
+                              <button
+                                className="btn btn-success btn-sm"
+                                onClick={() => openPay(r)}
+                              >
+                                Pay
+                              </button>
+                            )}
+                            {r.status !== 'PAID' && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => openEdit(r)}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </PlanRestrictedSection>
       )}
 
       {/* Create Rent Modal */}
@@ -285,14 +413,17 @@ export default function Rents() {
             <div className="form-group">
               <label className="form-label">Amount (₦)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className="form-input"
-                value={form.amount || ''}
-                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-                min={1}
-                step={0.01}
+                value={createAmount}
+                onChange={(e) => setCreateAmount(e.target.value)}
+                placeholder="e.g. 1500000.00"
                 required
               />
+              <div className="form-hint">
+                Use up to 10 digits and 2 decimal places.
+              </div>
             </div>
             <div className="modal-footer">
               <button
@@ -326,12 +457,12 @@ export default function Rents() {
             <div className="form-group">
               <label className="form-label">Payment Amount (₦)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className="form-input"
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
-                min={0.01}
-                step={0.01}
+                placeholder="e.g. 500000.00"
                 required
               />
             </div>
@@ -363,12 +494,12 @@ export default function Rents() {
             <div className="form-group">
               <label className="form-label">Rent Amount (₦)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className="form-input"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
-                min={0.01}
-                step={0.01}
+                placeholder="e.g. 1500000.00"
                 required
               />
             </div>
