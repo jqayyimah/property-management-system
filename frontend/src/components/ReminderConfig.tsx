@@ -51,6 +51,16 @@ const PREVIEW_VALUES: Record<string, string> = {
   due_date: '2026-03-31',
 };
 
+const formatTemplateForEditor = (message: string) => {
+  if (!/<\/?[a-z][\s\S]*>/i.test(message)) {
+    return message;
+  }
+
+  return message
+    .replace(/>\s*</g, '>\n<')
+    .replace(/^\s+|\s+$/g, '');
+};
+
 export default function ReminderConfig() {
   const { isAdmin } = useAuth();
   const [template, setTemplate] = useState('');
@@ -75,8 +85,9 @@ export default function ReminderConfig() {
 
   useEffect(() => {
     getMessageTemplate().then((msg) => {
-      setTemplate(msg);
-      setOriginal(msg);
+      const formatted = formatTemplateForEditor(msg);
+      setTemplate(formatted);
+      setOriginal(formatted);
     });
     getReminderChannels().then((data) => {
       setChannels(data.channels);
@@ -103,7 +114,7 @@ export default function ReminderConfig() {
         saveReminderChannels(channels),
         saveReminderSchedule(scheduleRules),
       ]);
-      setOriginal(template);
+      setOriginal(formatTemplateForEditor(template));
       setOriginalChannels(channels);
       setOriginalScheduleRules(scheduleRules);
       setStatus('saved');

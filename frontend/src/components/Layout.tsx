@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const primaryLinks = [
     { to: '/', label: 'Dashboard', icon: '◫' },
@@ -20,9 +22,19 @@ export default function Layout() {
     navigate('/login');
   };
 
+  const handleNavClick = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <button
+        type="button"
+        className={`mobile-nav-overlay ${isMobileMenuOpen ? 'is-open' : ''}`}
+        aria-label="Close navigation menu"
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+      <aside className={`sidebar ${isMobileMenuOpen ? 'is-open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">PM</div>
           <div>
@@ -34,7 +46,12 @@ export default function Layout() {
         </div>
         <nav>
           {primaryLinks.map((link) => (
-            <NavLink key={link.to} to={link.to} end={link.to === '/'}>
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === '/'}
+              onClick={handleNavClick}
+            >
               <span className="sidebar-icon" aria-hidden="true">
                 {link.icon}
               </span>
@@ -42,7 +59,7 @@ export default function Layout() {
             </NavLink>
           ))}
           {isAdmin && (
-            <NavLink to="/admin/consumption">
+            <NavLink to="/admin/consumption" onClick={handleNavClick}>
               <span className="sidebar-icon" aria-hidden="true">
                 📊
               </span>
@@ -50,14 +67,14 @@ export default function Layout() {
             </NavLink>
           )}
           {isAdmin && (
-            <NavLink to="/admin/landlords">
+            <NavLink to="/admin/landlords" onClick={handleNavClick}>
               <span className="sidebar-icon" aria-hidden="true">
                 🧾
               </span>
               <span>Landlords</span>
             </NavLink>
           )}
-          <NavLink to="/settings">
+          <NavLink to="/settings" onClick={handleNavClick}>
             <span className="sidebar-icon" aria-hidden="true">
               ⚙️
             </span>
@@ -71,12 +88,23 @@ export default function Layout() {
       </aside>
       <div className="main-content">
         <header className="header">
+          <div className="header-leading">
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              aria-label="Open navigation menu"
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+            >
+              ☰
+            </button>
           <div>
             <div className="header-eyebrow">Workspace</div>
             <span className="header-user">
               {user?.full_name ?? user?.email}
               {user?.role && <span className="header-role">{user.role}</span>}
             </span>
+          </div>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
             Logout

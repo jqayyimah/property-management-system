@@ -77,6 +77,11 @@ textarea:focus-visible {
   min-height: 100vh;
 }
 
+.mobile-nav-overlay,
+.mobile-nav-toggle {
+  display: none;
+}
+
 .sidebar {
   width: 268px;
   flex-shrink: 0;
@@ -200,6 +205,13 @@ textarea:focus-visible {
   background: rgba(248, 250, 252, 0.88);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.header-leading {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .header-user {
@@ -1433,25 +1445,70 @@ tbody tr:last-child td {
 
 @media (max-width: 900px) {
   .app-layout {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .sidebar {
-    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 35;
+    width: min(320px, calc(100vw - 3rem));
+    height: 100vh;
     padding-bottom: 1rem;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.35);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
   }
 
   .sidebar nav {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-direction: column;
+    flex-wrap: nowrap;
   }
 
   .sidebar nav a {
-    flex: 1 1 180px;
+    flex: none;
   }
 
   .sidebar-footer {
     margin-top: 1rem;
+  }
+
+  .mobile-nav-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .mobile-nav-overlay.is-open {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(203, 213, 225, 0.9);
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   }
 
   .header,
