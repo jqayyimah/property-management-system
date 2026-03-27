@@ -2,6 +2,11 @@
 
 FastAPI + MySQL + SQLAlchemy backend with a React + TypeScript frontend.
 
+## Current Live URLs
+
+- Frontend: `https://property-management-frontend-phi.vercel.app`
+- Backend: `https://property-management-system-production-e799.up.railway.app`
+
 ## Deploy Readiness
 
 This repo is now prepared for hosting with:
@@ -51,7 +56,7 @@ npm run build
 Set:
 
 ```bash
-VITE_API_URL=https://your-backend-domain.example
+VITE_API_URL=https://property-management-system-production-e799.up.railway.app
 ```
 
 The generated static files are in `frontend/dist`.
