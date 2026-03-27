@@ -8,3 +8,4 @@ python-jose==3.5.0
 passlib[bcrypt]==1.7.4
 APScheduler==3.11.0
 email-validator==2.3.0
+requests==2.32.3
