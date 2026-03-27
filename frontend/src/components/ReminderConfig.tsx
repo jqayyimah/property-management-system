@@ -71,6 +71,7 @@ export default function ReminderConfig() {
     /\{(tenant_name|property_name|apartment|amount|due_date)\}/g,
     (_, key: keyof typeof PREVIEW_VALUES) => PREVIEW_VALUES[key] ?? `{${key}}`
   );
+  const previewContainsHtml = /<\/?[a-z][\s\S]*>/i.test(previewMessage);
 
   useEffect(() => {
     getMessageTemplate().then((msg) => {
@@ -305,7 +306,14 @@ export default function ReminderConfig() {
           <div className="preview-subtitle">
             Sample render using placeholder values for a due rent notice.
           </div>
-          <div className="preview-body">{previewMessage}</div>
+          {previewContainsHtml ? (
+            <div
+              className="preview-body preview-body-html"
+              dangerouslySetInnerHTML={{ __html: previewMessage }}
+            />
+          ) : (
+            <div className="preview-body">{previewMessage}</div>
+          )}
         </div>
       </div>
 

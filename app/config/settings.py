@@ -25,6 +25,9 @@ class Settings(BaseModel):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str | None = None
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM_EMAIL: str | None = None
+    RESEND_BASE_URL: str = "https://api.resend.com"
 
     # 📲 Termii messaging
     TERMII_API_KEY: str | None = None
@@ -48,6 +51,9 @@ settings = Settings(
     SMTP_PASSWORD=os.getenv("SMTP_PASSWORD"),
     SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL"),
     SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME"),
+    RESEND_API_KEY=os.getenv("RESEND_API_KEY"),
+    RESEND_FROM_EMAIL=os.getenv("RESEND_FROM_EMAIL"),
+    RESEND_BASE_URL=os.getenv("RESEND_BASE_URL") or "https://api.resend.com",
     TERMII_API_KEY=os.getenv("TERMII_API_KEY"),
     TERMII_SENDER_ID=os.getenv("TERMII_SENDER_ID"),
     TERMII_WHATSAPP_SENDER_ID=os.getenv("TERMII_WHATSAPP_SENDER_ID"),
