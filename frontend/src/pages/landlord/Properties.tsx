@@ -22,11 +22,21 @@ const emptyForm = (landlordId: number | null): HouseCreate => ({
 });
 
 export default function Properties() {
-  const { isAdmin, landlordId, billingRestricted, billingLoading } = useAuth();
+  const {
+    isAdmin,
+    landlordId,
+    billingRestricted,
+    billingLoading,
+    billingSubscription,
+  } = useAuth();
   const [houses, setHouses] = useState<House[]>([]);
   const [landlords, setLandlords] = useState<AdminLandlord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState<{ rowId: number | null; message: string }>({
+    rowId: null,
+    message: '',
+  });
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<House | null>(null);
   const [form, setForm] = useState<HouseCreate>(emptyForm(landlordId));
@@ -35,6 +45,7 @@ export default function Properties() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<House | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const load = async () => {
@@ -72,15 +83,35 @@ export default function Properties() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    const handleWindowClick = () => setMenuTargetId(null);
+    const handleWindowClick = () => {
+      setMenuTargetId(null);
+      setActionError({ rowId: null, message: '' });
+    };
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
 
+  const hasReachedHouseLimit = !isAdmin
+    && !billingLoading
+    && !billingRestricted
+    && !!billingSubscription
+    && billingSubscription.houses_remaining <= 0;
+
+  const addPropertyDisabled = billingLoading || billingRestricted || hasReachedHouseLimit;
+
+  const addPropertyMessage = hasReachedHouseLimit
+    ? 'Free trial limit reached. Upgrade your plan to add more houses.'
+    : '';
+
   const openCreate = () => {
+    if (addPropertyDisabled) {
+      setError(addPropertyMessage || 'You cannot add another property right now.');
+      return;
+    }
     setEditTarget(null);
     setForm(emptyForm(landlordId));
     setError('');
+    setActionError({ rowId: null, message: '' });
     setShowModal(true);
   };
 
@@ -88,6 +119,7 @@ export default function Properties() {
     setEditTarget(house);
     setForm({ name: house.name, address: house.address, landlord_id: house.landlord_id });
     setError('');
+    setActionError({ rowId: null, message: '' });
     setShowModal(true);
   };
 
@@ -118,13 +150,14 @@ export default function Properties() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(deleteTarget.id);
-    setError('');
+    setDeleteError('');
+    setActionError({ rowId: deleteTarget.id, message: '' });
     try {
       await deleteHouse(deleteTarget.id);
       setDeleteTarget(null);
       void load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to delete property'));
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete property'));
     } finally {
       setDeleting(null);
     }
@@ -146,12 +179,19 @@ export default function Properties() {
           <button
             className="btn btn-primary"
             onClick={openCreate}
-            disabled={billingLoading || billingRestricted}
+            disabled={addPropertyDisabled}
+            title={addPropertyMessage || undefined}
           >
             + Add Property
           </button>
         </div>
       </div>
+
+      {addPropertyMessage && (
+        <div className="info-banner">
+          {addPropertyMessage}
+        </div>
+      )}
 
       {error && (
         <div className="error-msg" style={{ justifyContent: 'space-between' }}>
@@ -228,6 +268,9 @@ export default function Properties() {
                             className="btn btn-secondary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setActionError((current) =>
+                                current.rowId === h.id ? { rowId: null, message: '' } : current
+                              );
                               setMenuTargetId((current) => (current === h.id ? null : h.id));
                             }}
                           >
@@ -248,6 +291,7 @@ export default function Properties() {
                                 <button
                                   className="context-menu-item context-menu-item-danger"
                                   onClick={() => {
+                                    setDeleteError('');
                                     setDeleteTarget(h);
                                     setMenuTargetId(null);
                                   }}
@@ -256,6 +300,11 @@ export default function Properties() {
                                   {deleting === h.id ? 'Deleting...' : 'Delete'}
                                 </button>
                               )}
+                            </div>
+                          )}
+                          {actionError.rowId === h.id && actionError.message && (
+                            <div className="context-menu-feedback" role="alert">
+                              {actionError.message}
                             </div>
                           )}
                         </div>
@@ -342,10 +391,14 @@ export default function Properties() {
         <ConfirmDialog
           title="Delete Property"
           message={`Delete "${deleteTarget.name}"? This cannot be undone.`}
+          error={deleteError}
           confirmLabel="Delete Property"
           loading={deleting === deleteTarget.id}
           onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => {
+            setDeleteError('');
+            setDeleteTarget(null);
+          }}
         />
       )}
     </div>

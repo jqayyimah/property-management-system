@@ -225,7 +225,7 @@ export default function Rents() {
           <h1 className="page-title">Rents</h1>
           <p className="page-subtitle">
             Review rent cycles, outstanding balances, and payment progress in one
-            clean workspace.
+            clear operating view.
           </p>
         </div>
         <div className="page-actions">
@@ -349,7 +349,7 @@ export default function Rents() {
                                       setMenuTargetId(null);
                                     }}
                                   >
-                                    Pay
+                                    Record Payment
                                   </button>
                                 )}
                                 {r.status !== 'PAID' && (

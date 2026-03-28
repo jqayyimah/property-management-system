@@ -80,7 +80,7 @@ LEGACY_TEMPLATE = (
     "Regards,\nProperty Management"
 )
 
-DEFAULT_TEMPLATE = (
+LEGACY_HTML_TEMPLATE = (
     "<div style=\"margin:0;padding:24px 0;background:#f4efe7;font-family:Georgia,'Times New Roman',serif;color:#1f2937;\">"
     "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eadfce;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.08);\">"
     "<div style=\"padding:28px 32px;background:linear-gradient(135deg,#0f766e,#115e59);color:#ffffff;\">"
@@ -108,6 +108,24 @@ DEFAULT_TEMPLATE = (
     "</div>"
 )
 
+DEFAULT_TEMPLATE = (
+    "Hello {tenant_name},\n\n"
+    "This is a friendly reminder that your rent for {property_name} ({apartment}) "
+    "is due on {due_date}.\n\n"
+    "Outstanding Balance\n"
+    "{amount}\n\n"
+    "Please make payment before the due date to keep your rent record in good standing.\n\n"
+    "Thank you,\n"
+    "Property Management Team"
+)
+
+LEGACY_HTML_MARKERS = (
+    "background:#f4efe7",
+    "Rent Reminder",
+    "Outstanding Balance",
+    "Property Management Team",
+)
+
 SUBJECT_MAP = {
     "30_DAYS": "Rent Reminder: 1 Month to Due Date",
     "7_DAYS": "Rent Reminder: 7 Days to Due Date",
@@ -123,6 +141,7 @@ CHANNEL_SERVICE_COSTS = {
     "dashboard": Decimal("0.00"),
 }
 WAT_TIMEZONE = ZoneInfo("Africa/Lagos")
+LANDLORD_EMAIL_REMINDER_TYPES = {"30_DAYS", "7_DAYS"}
 
 
 def _template_setting_keys(landlord_id: Optional[int]) -> list[str]:
@@ -133,6 +152,11 @@ def _template_setting_keys(landlord_id: Optional[int]) -> list[str]:
     return keys
 
 
+def _is_legacy_html_template(message: str) -> bool:
+    normalized = str(message or "")
+    return all(marker in normalized for marker in LEGACY_HTML_MARKERS)
+
+
 def _schedule_setting_keys(landlord_id: Optional[int]) -> list[str]:
     keys = []
     if landlord_id is not None:
@@ -141,11 +165,21 @@ def _schedule_setting_keys(landlord_id: Optional[int]) -> list[str]:
     return keys
 
 
+def _channel_setting_keys(landlord_id: Optional[int]) -> list[str]:
+    keys = []
+    if landlord_id is not None:
+        keys.append(f"{CHANNELS_SETTING_KEY}:landlord:{landlord_id}")
+    keys.append(CHANNELS_SETTING_KEY)
+    return keys
+
+
 def get_reminder_template(db: Session, landlord_id: Optional[int] = None) -> str:
     for key in _template_setting_keys(landlord_id):
         setting = db.query(AppSetting).filter(AppSetting.key == key).first()
         if setting:
-            return DEFAULT_TEMPLATE if setting.value == LEGACY_TEMPLATE else setting.value
+            if setting.value in {LEGACY_TEMPLATE, LEGACY_HTML_TEMPLATE} or _is_legacy_html_template(setting.value):
+                return DEFAULT_TEMPLATE
+            return setting.value
 
     return DEFAULT_TEMPLATE
 
@@ -168,27 +202,34 @@ def save_reminder_template(
     db.commit()
 
 
-def get_enabled_channels(db: Session) -> list[str]:
-    setting = (
-        db.query(AppSetting).filter(
-            AppSetting.key == CHANNELS_SETTING_KEY).first()
-    )
-    if not setting:
-        return DEFAULT_CHANNELS.copy()
+def get_enabled_channels(db: Session, landlord_id: Optional[int] = None) -> list[str]:
+    for key in _channel_setting_keys(landlord_id):
+        setting = (
+            db.query(AppSetting).filter(
+                AppSetting.key == key).first()
+        )
+        if not setting:
+            continue
 
-    try:
-        channels = json.loads(setting.value)
-    except json.JSONDecodeError:
-        return DEFAULT_CHANNELS.copy()
+        try:
+            channels = json.loads(setting.value)
+        except json.JSONDecodeError:
+            continue
 
-    if not isinstance(channels, list):
-        return DEFAULT_CHANNELS.copy()
+        if not isinstance(channels, list):
+            continue
 
-    normalized = [str(channel).lower() for channel in channels]
-    return [channel for channel in normalized if channel in SUPPORTED_CHANNELS]
+        normalized = [str(channel).lower() for channel in channels]
+        valid_channels = [channel for channel in normalized if channel in SUPPORTED_CHANNELS]
+        if valid_channels:
+            return valid_channels
+
+    return DEFAULT_CHANNELS.copy()
 
 
-def save_enabled_channels(db: Session, channels: list[str]) -> list[str]:
+def save_enabled_channels(
+    db: Session, channels: list[str], landlord_id: Optional[int] = None
+) -> list[str]:
     normalized = []
     for channel in channels:
         value = str(channel).lower()
@@ -198,16 +239,21 @@ def save_enabled_channels(db: Session, channels: list[str]) -> list[str]:
     if not normalized:
         raise ValueError("At least one reminder channel must be enabled")
 
+    key = (
+        f"{CHANNELS_SETTING_KEY}:landlord:{landlord_id}"
+        if landlord_id is not None
+        else CHANNELS_SETTING_KEY
+    )
     setting = (
         db.query(AppSetting).filter(
-            AppSetting.key == CHANNELS_SETTING_KEY).first()
+            AppSetting.key == key).first()
     )
     payload = json.dumps(normalized)
 
     if setting:
         setting.value = payload
     else:
-        db.add(AppSetting(key=CHANNELS_SETTING_KEY, value=payload))
+        db.add(AppSetting(key=key, value=payload))
 
     db.commit()
     return normalized
@@ -365,6 +411,43 @@ def _build_channel_message(channel: str, template: str, **ctx) -> str:
     if channel == "email":
         return message if _looks_like_html(message) else _plain_text_to_html(message)
     return _html_to_text(message)
+
+
+def _build_landlord_notification_message(
+    reminder_type: str,
+    *,
+    landlord_name: str,
+    tenant_name: str,
+    property_name: str,
+    apartment: str,
+    due_date,
+    amount,
+) -> str:
+    reminder_label = (
+        "one month"
+        if reminder_type == "30_DAYS"
+        else "seven days"
+    )
+
+    return (
+        "<div style=\"margin:0;padding:24px 0;background:#f8fafc;font-family:Inter,'Segoe UI',sans-serif;color:#0f172a;\">"
+        "<div style=\"max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ee;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.08);\">"
+        "<div style=\"padding:24px 28px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#ffffff;\">"
+        "<div style=\"font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;\">Landlord Notification</div>"
+        f"<h1 style=\"margin:12px 0 0;font-size:26px;line-height:1.2;font-weight:700;\">Rent due in {reminder_label}</h1>"
+        "</div>"
+        "<div style=\"padding:28px;\">"
+        f"<p style=\"margin:0 0 14px;font-size:15px;line-height:1.7;\">Hello <strong>{landlord_name}</strong>,</p>"
+        f"<p style=\"margin:0 0 18px;font-size:15px;line-height:1.7;\">{tenant_name}'s rent for <strong>{property_name}</strong> ({apartment}) is due on <strong>{due_date}</strong>.</p>"
+        "<div style=\"margin:20px 0;padding:18px 20px;background:#f8fafc;border:1px solid #dbe4ee;border-radius:14px;\">"
+        "<div style=\"font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px;\">Outstanding Balance</div>"
+        f"<div style=\"font-size:28px;line-height:1.1;font-weight:700;color:#0f172a;\">{amount}</div>"
+        "</div>"
+        "<p style=\"margin:0;font-size:14px;line-height:1.7;color:#475569;\">This notice was sent to help you follow up early with the tenant where necessary.</p>"
+        "</div>"
+        "</div>"
+        "</div>"
+    )
 
 
 def get_channel_service_cost(channel: Optional[str], status: str = "SENT") -> Decimal:
@@ -541,7 +624,7 @@ def run_reminders(
         ensure_landlord_can_send_reminders(db, landlord_id)
 
     today = datetime.now(WAT_TIMEZONE).date()
-    enabled_channels = get_enabled_channels(db)
+    enabled_channels = get_enabled_channels(db, landlord_id=landlord_id)
     rents = _base_unpaid_query(db, landlord_id).all()
     sent_count = 0
     template_cache: dict[Optional[int], str] = {}
@@ -581,6 +664,7 @@ def run_reminders(
             )
 
         template = template_cache[template_owner_id]
+        landlord = house.landlord if house else None
 
         for reminder_type in due_types:
             if respect_schedule and not _schedule_allows_type(
@@ -603,6 +687,48 @@ def run_reminders(
 
             subject = SUBJECT_MAP.get(reminder_type, "Rent Reminder")
             channel_attempted = False
+
+            if (
+                landlord
+                and landlord.email
+                and reminder_type in LANDLORD_EMAIL_REMINDER_TYPES
+            ):
+                landlord_message = _build_landlord_notification_message(
+                    reminder_type,
+                    landlord_name=landlord.full_name,
+                    tenant_name=tenant.full_name,
+                    property_name=property_name,
+                    apartment=apt_label,
+                    due_date=rent.end_date,
+                    amount=outstanding,
+                )
+                landlord_status = "SENT"
+                try:
+                    send_email(
+                        landlord.email,
+                        f"Landlord Alert: {subject}",
+                        landlord_message,
+                    )
+                except Exception as exc:
+                    landlord_status = "FAILED"
+                    print(
+                        f"❌ Landlord email failed for landlord {landlord.id}: {exc}"
+                    )
+
+                db.add(
+                    RentReminderLog(
+                        rent_id=rent.id,
+                        tenant_id=tenant.id,
+                        reminder_type=reminder_type,
+                        message=landlord_message,
+                        status=landlord_status,
+                        channel_used="email",
+                        service_cost=get_channel_service_cost("email", landlord_status),
+                        cost_currency="NGN",
+                    )
+                )
+                if landlord_status == "SENT":
+                    sent_count += 1
 
             for channel in enabled_channels:
                 send_status = "SENT"

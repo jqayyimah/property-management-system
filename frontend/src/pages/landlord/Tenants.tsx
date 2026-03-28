@@ -5,6 +5,7 @@ import {
   createTenant,
   updateTenant,
   exitTenant,
+  deleteTenant,
 } from '../../services/tenantService';
 import { getApartments } from '../../services/apartmentService';
 import { getHouses } from '../../services/houseService';
@@ -19,7 +20,7 @@ const emptyForm: TenantCreate = { full_name: '', email: '', phone: '', apartment
 const ITEMS_PER_PAGE = 10;
 
 export default function Tenants() {
-  const { billingRestricted, billingLoading } = useAuth();
+  const { billingRestricted, billingLoading, isAdmin } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
@@ -30,9 +31,13 @@ export default function Tenants() {
   const [form, setForm] = useState<TenantCreate>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [exiting, setExiting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [exitTarget, setExitTarget] = useState<Tenant | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
+  const [confirmError, setConfirmError] = useState('');
+  const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const houseMap = Object.fromEntries(houses.map((h) => [h.id, h]));
   const apartmentMap = Object.fromEntries(apartments.map((a) => [a.id, a]));
@@ -83,6 +88,11 @@ export default function Tenants() {
   );
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const handleWindowClick = () => setMenuTargetId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -134,15 +144,30 @@ export default function Tenants() {
   const handleExit = async () => {
     if (!exitTarget) return;
     setExiting(exitTarget.id);
-    setError('');
+    setConfirmError('');
     try {
       await exitTenant(exitTarget.id);
       setExitTarget(null);
       void load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to exit tenant'));
+      setConfirmError(getApiErrorMessage(err, 'Failed to exit tenant'));
     } finally {
       setExiting(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(deleteTarget.id);
+    setConfirmError('');
+    try {
+      await deleteTenant(deleteTarget.id);
+      setDeleteTarget(null);
+      void load();
+    } catch (err: unknown) {
+      setConfirmError(getApiErrorMessage(err, 'Failed to delete tenant'));
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -241,21 +266,54 @@ export default function Tenants() {
                       <td>{t.phone ?? '—'}</td>
                       <td>{aptLabel(t.apartment_id)}</td>
                       <td>
-                        <div className="table-actions">
+                        <div className="context-menu-wrap">
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={() => openEdit(t)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTargetId((current) => (current === t.id ? null : t.id));
+                            }}
                           >
-                            Edit
+                            Actions
                           </button>
-                          {t.apartment_id && (
-                            <button
-                              className="btn btn-warning btn-sm"
-                              onClick={() => setExitTarget(t)}
-                              disabled={exiting === t.id}
-                            >
-                              {exiting === t.id ? '...' : 'Exit'}
-                            </button>
+                          {menuTargetId === t.id && (
+                            <div className="context-menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="context-menu-item"
+                                onClick={() => {
+                                  openEdit(t);
+                                  setMenuTargetId(null);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              {t.apartment_id && (
+                                <button
+                                  className="context-menu-item"
+                                  onClick={() => {
+                                    setConfirmError('');
+                                    setExitTarget(t);
+                                    setMenuTargetId(null);
+                                  }}
+                                  disabled={exiting === t.id}
+                                >
+                                  {exiting === t.id ? 'Exiting...' : 'Exit'}
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  className="context-menu-item context-menu-item-danger"
+                                  onClick={() => {
+                                    setConfirmError('');
+                                    setDeleteTarget(t);
+                                    setMenuTargetId(null);
+                                  }}
+                                  disabled={deleting === t.id}
+                                >
+                                  {deleting === t.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -352,11 +410,30 @@ export default function Tenants() {
         <ConfirmDialog
           title="Exit Tenant"
           message={`Exit tenant "${exitTarget.full_name}" from their apartment? The apartment will be marked vacant.`}
+          error={confirmError}
           confirmLabel="Exit Tenant"
           tone="warning"
           loading={exiting === exitTarget.id}
           onConfirm={handleExit}
-          onClose={() => setExitTarget(null)}
+          onClose={() => {
+            setConfirmError('');
+            setExitTarget(null);
+          }}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Tenant"
+          message={`Delete tenant "${deleteTarget.full_name}"? This cannot be undone.`}
+          error={confirmError}
+          confirmLabel="Delete Tenant"
+          loading={deleting === deleteTarget.id}
+          onConfirm={handleDelete}
+          onClose={() => {
+            setConfirmError('');
+            setDeleteTarget(null);
+          }}
         />
       )}
     </div>

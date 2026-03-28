@@ -27,6 +27,7 @@ export default function Rents() {
   const [form, setForm] = useState<RentCreate>(emptyForm);
   const [payAmount, setPayAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -42,6 +43,12 @@ export default function Rents() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const handleWindowClick = () => setMenuTargetId(null);
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
   }, []);
 
   const openCreate = () => {
@@ -150,12 +157,30 @@ export default function Rents() {
                     <td>{r.end_date}</td>
                     <td>
                       {r.status !== 'PAID' && (
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={() => openPay(r)}
-                        >
-                          Pay
-                        </button>
+                        <div className="context-menu-wrap">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTargetId((current) => (current === r.id ? null : r.id));
+                            }}
+                          >
+                            Actions
+                          </button>
+                          {menuTargetId === r.id && (
+                            <div className="context-menu" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="context-menu-item"
+                                onClick={() => {
+                                  openPay(r);
+                                  setMenuTargetId(null);
+                                }}
+                              >
+                                Record Payment
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

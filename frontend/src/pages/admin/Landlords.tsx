@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../components/Modal';
 import Pagination from '../../components/Pagination';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { AdminLandlord } from '../../types';
 import {
   approveLandlord,
@@ -48,9 +49,14 @@ export default function AdminLandlords() {
   const [landlords, setLandlords] = useState<AdminLandlord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState<{ rowId: number | null; message: string }>({
+    rowId: null,
+    message: '',
+  });
   const [editTarget, setEditTarget] = useState<AdminLandlord | null>(null);
   const [detailTarget, setDetailTarget] = useState<AdminLandlord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminLandlord | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [form, setForm] = useState<EditForm>(emptyForm);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
@@ -83,6 +89,7 @@ export default function AdminLandlords() {
   const load = async () => {
     try {
       setError('');
+      setActionError({ rowId: null, message: '' });
       setLandlords(await getLandlords());
       setPage(1);
     } catch (err: unknown) {
@@ -122,7 +129,10 @@ export default function AdminLandlords() {
   }, []);
 
   useEffect(() => {
-    const handleWindowClick = () => setMenuTargetId(null);
+    const handleWindowClick = () => {
+      setMenuTargetId(null);
+      setActionError({ rowId: null, message: '' });
+    };
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
@@ -135,22 +145,29 @@ export default function AdminLandlords() {
       phone: landlord.phone ?? '',
     });
     setError('');
+    setActionError({ rowId: null, message: '' });
   };
 
   const handleApprove = async (landlord: AdminLandlord) => {
     if (!landlord.user_id) {
-      setError('This landlord is missing a linked user account and cannot be approved.');
+      setActionError({
+        rowId: landlord.id,
+        message: 'This landlord is missing a linked user account and cannot be approved.',
+      });
       return;
     }
 
     setApprovingId(landlord.id);
-    setError('');
+    setActionError({ rowId: landlord.id, message: '' });
 
     try {
       await approveLandlord(landlord.user_id);
       await load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to approve landlord'));
+      setActionError({
+        rowId: landlord.id,
+        message: getApiErrorMessage(err, 'Failed to approve landlord'),
+      });
     } finally {
       setApprovingId(null);
     }
@@ -176,18 +193,24 @@ export default function AdminLandlords() {
 
   const handleDeactivate = async (landlord: AdminLandlord) => {
     if (!landlord.user_id) {
-      setError('This landlord is missing a linked user account and cannot be deactivated.');
+      setActionError({
+        rowId: landlord.id,
+        message: 'This landlord is missing a linked user account and cannot be deactivated.',
+      });
       return;
     }
 
     setDeactivatingId(landlord.id);
-    setError('');
+    setActionError({ rowId: landlord.id, message: '' });
 
     try {
       await deactivateLandlord(landlord.user_id);
       await load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to deactivate landlord'));
+      setActionError({
+        rowId: landlord.id,
+        message: getApiErrorMessage(err, 'Failed to deactivate landlord'),
+      });
     } finally {
       setDeactivatingId(null);
     }
@@ -197,14 +220,15 @@ export default function AdminLandlords() {
     if (!deleteTarget) return;
 
     setDeletingId(deleteTarget.id);
-    setError('');
+    setDeleteError('');
+    setActionError({ rowId: deleteTarget.id, message: '' });
 
     try {
       await deleteLandlord(deleteTarget.id);
       setDeleteTarget(null);
       await load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to delete landlord'));
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete landlord'));
     } finally {
       setDeletingId(null);
     }
@@ -255,7 +279,7 @@ export default function AdminLandlords() {
               <div className="summary-card-icon">👤</div>
               <div className="summary-card-value">{landlords.length}</div>
               <div className="summary-card-label">Total Landlords</div>
-              <div className="summary-card-note">All landlord accounts in the workspace</div>
+              <div className="summary-card-note">All landlord accounts on the platform</div>
             </div>
             <div className="summary-card summary-card-success">
               <div className="summary-card-icon">✅</div>
@@ -410,6 +434,11 @@ export default function AdminLandlords() {
                             className="btn btn-secondary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setActionError((current) =>
+                                current.rowId === landlord.id
+                                  ? { rowId: null, message: '' }
+                                  : current
+                              );
                               setMenuTargetId((current) =>
                                 current === landlord.id ? null : landlord.id
                               );
@@ -478,6 +507,7 @@ export default function AdminLandlords() {
                               <button
                                 className="context-menu-item context-menu-item-danger"
                                 onClick={() => {
+                                  setDeleteError('');
                                   setDeleteTarget(landlord);
                                   setMenuTargetId(null);
                                 }}
@@ -485,6 +515,11 @@ export default function AdminLandlords() {
                               >
                                 {deletingId === landlord.id ? 'Deleting...' : 'Delete'}
                               </button>
+                            </div>
+                          )}
+                          {actionError.rowId === landlord.id && actionError.message && (
+                            <div className="context-menu-feedback" role="alert">
+                              {actionError.message}
                             </div>
                           )}
                         </div>
@@ -645,28 +680,18 @@ export default function AdminLandlords() {
       )}
 
       {deleteTarget && (
-        <Modal title="Delete Landlord" onClose={() => setDeleteTarget(null)}>
-          <p>
-            Delete <strong>{deleteTarget.full_name}</strong>? This cannot be undone.
-          </p>
-          <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setDeleteTarget(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger btn-sm"
-              onClick={handleDelete}
-              disabled={deletingId === deleteTarget.id}
-            >
-              {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete'}
-            </button>
-          </div>
-        </Modal>
+        <ConfirmDialog
+          title="Delete Landlord"
+          message={`Delete "${deleteTarget.full_name}"? This cannot be undone.`}
+          error={deleteError}
+          confirmLabel="Delete"
+          loading={deletingId === deleteTarget.id}
+          onConfirm={handleDelete}
+          onClose={() => {
+            setDeleteError('');
+            setDeleteTarget(null);
+          }}
+        />
       )}
     </div>
   );

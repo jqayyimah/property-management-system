@@ -140,11 +140,11 @@ def _ensure_billing_seed_data():
         {
             "slug": "trial",
             "name": "Free Trial",
-            "description": "30-day free access for new landlords managing up to 5 houses",
+            "description": "30-day free access for new landlords managing 1 house",
             "price_amount": Decimal("0.00"),
             "currency": "NGN",
             "apartment_limit": 0,
-            "house_limit": 5,
+            "house_limit": 1,
             "duration_days": 30,
             "is_default": True,
             "is_active": True,

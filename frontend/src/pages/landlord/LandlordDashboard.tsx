@@ -44,7 +44,7 @@ export default function LandlordDashboard() {
       <div className="page-shell">
         <div className="page-hero">
           <div className="page-hero-content">
-            <span className="page-kicker">Landlord workspace</span>
+            <span className="page-kicker">Portfolio overview</span>
             <h1 className="page-title">Dashboard</h1>
             <p className="page-subtitle">
               Loading your latest property performance, collections, and reminder
@@ -65,7 +65,7 @@ export default function LandlordDashboard() {
       <div className="page-shell">
         <div className="page-hero">
           <div className="page-hero-content">
-            <span className="page-kicker">Landlord workspace</span>
+            <span className="page-kicker">Portfolio overview</span>
             <h1 className="page-title">Dashboard</h1>
             <p className="page-subtitle">
               Monitor rent health, upcoming due dates, and reminder activity in
@@ -89,7 +89,7 @@ export default function LandlordDashboard() {
     <div className="page-shell">
       <div className="page-hero">
         <div className="page-hero-content">
-          <span className="page-kicker">Landlord workspace</span>
+          <span className="page-kicker">Portfolio overview</span>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">
             Track occupancy, collections, and reminder activity across your rental
@@ -101,6 +101,24 @@ export default function LandlordDashboard() {
           <span className="badge badge-occupied">{totals.tenants} active tenants</span>
         </div>
       </div>
+
+      {billingRestricted && (
+        <div className="error-msg" style={{ alignItems: 'center', gap: '0.85rem' }}>
+          <span className="badge badge-unpaid">Billing Required</span>
+          <span style={{ flex: 1 }}>
+            Your billing plan has expired. Renew your plan to restore access to financial details,
+            reminders, and operational records.
+          </span>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              window.location.href = '/billing';
+            }}
+          >
+            View Billing Plans
+          </button>
+        </div>
+      )}
 
       <div className="summary-cards">
         <div className="summary-card">

@@ -90,8 +90,8 @@ export default function Reminders() {
           <span className="page-kicker">Automation</span>
           <h1 className="page-title">Rent Reminders</h1>
           <p className="page-subtitle">
-            Review upcoming reminders, refine your message template, and send due
-            notices across active channels.
+            Review upcoming reminders, send due notices, and track recent
+            delivery activity across your properties.
           </p>
         </div>
         <div className="page-actions">
@@ -159,13 +159,14 @@ export default function Reminders() {
       <div className="section-block">
         <div className="section-header">
           <div>
-            <h2 className="section-title">Reminder Settings</h2>
+            <h2 className="section-title">Reminder Message Template</h2>
             <p className="section-subtitle">
-              Configure channels, update the template, and test delivery safely.
+              Update the base reminder content here while channel and schedule
+              controls remain under settings.
             </p>
           </div>
         </div>
-        <ReminderConfig />
+        <ReminderConfig variant="template" />
       </div>
 
       <div className="section-block">
@@ -175,6 +176,11 @@ export default function Reminders() {
             <p className="section-subtitle">
               Search the most recent reminder activity across all channels.
             </p>
+          </div>
+          <div className="page-actions">
+            <a className="btn btn-secondary btn-sm" href="/settings">
+              Manage Channels & Schedule
+            </a>
           </div>
         </div>
         <div className="toolbar">

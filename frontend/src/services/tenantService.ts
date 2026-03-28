@@ -15,3 +15,6 @@ export const updateTenant = (id: number, data: Partial<TenantCreate>) =>
 
 export const exitTenant = (id: number) =>
   api.put(`/tenants/${id}/exit`).then((r) => r.data);
+
+export const deleteTenant = (id: number) =>
+  api.delete(`/tenants/${id}`).then((r) => r.data);

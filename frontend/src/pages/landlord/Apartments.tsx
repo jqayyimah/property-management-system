@@ -22,6 +22,10 @@ export default function Apartments() {
   const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState<{ rowId: number | null; message: string }>({
+    rowId: null,
+    message: '',
+  });
   const [filterHouse, setFilterHouse] = useState<number>(0);
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Apartment | null>(null);
@@ -31,6 +35,7 @@ export default function Apartments() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Apartment | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
 
   const houseMap = Object.fromEntries(houses.map((h) => [h.id, h]));
@@ -50,7 +55,10 @@ export default function Apartments() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    const handleWindowClick = () => setMenuTargetId(null);
+    const handleWindowClick = () => {
+      setMenuTargetId(null);
+      setActionError({ rowId: null, message: '' });
+    };
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
   }, []);
@@ -78,6 +86,7 @@ export default function Apartments() {
     setEditTarget(null);
     setForm(emptyForm);
     setError('');
+    setActionError({ rowId: null, message: '' });
     setShowModal(true);
   };
 
@@ -89,6 +98,7 @@ export default function Apartments() {
       house_id: apt.house_id,
     });
     setError('');
+    setActionError({ rowId: null, message: '' });
     setShowModal(true);
   };
 
@@ -122,13 +132,14 @@ export default function Apartments() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(deleteTarget.id);
-    setError('');
+    setDeleteError('');
+    setActionError({ rowId: deleteTarget.id, message: '' });
     try {
       await deleteApartment(deleteTarget.id);
       setDeleteTarget(null);
       void load();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to delete apartment'));
+      setDeleteError(getApiErrorMessage(err, 'Failed to delete apartment'));
     } finally {
       setDeleting(null);
     }
@@ -261,6 +272,9 @@ export default function Apartments() {
                             className="btn btn-secondary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setActionError((current) =>
+                                current.rowId === apt.id ? { rowId: null, message: '' } : current
+                              );
                               setMenuTargetId((current) => (current === apt.id ? null : apt.id));
                             }}
                           >
@@ -281,6 +295,7 @@ export default function Apartments() {
                                 <button
                                   className="context-menu-item context-menu-item-danger"
                                   onClick={() => {
+                                    setDeleteError('');
                                     setDeleteTarget(apt);
                                     setMenuTargetId(null);
                                   }}
@@ -289,6 +304,11 @@ export default function Apartments() {
                                   {deleting === apt.id ? 'Deleting...' : 'Delete'}
                                 </button>
                               )}
+                            </div>
+                          )}
+                          {actionError.rowId === apt.id && actionError.message && (
+                            <div className="context-menu-feedback" role="alert">
+                              {actionError.message}
                             </div>
                           )}
                         </div>
@@ -384,10 +404,14 @@ export default function Apartments() {
           message={`Delete apartment "${
             houseMap[deleteTarget.house_id]?.name ?? '?'
           } - ${deleteTarget.unit_number}"? This cannot be undone.`}
+          error={deleteError}
           confirmLabel="Delete Apartment"
           loading={deleting === deleteTarget.id}
           onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => {
+            setDeleteError('');
+            setDeleteTarget(null);
+          }}
         />
       )}
     </div>

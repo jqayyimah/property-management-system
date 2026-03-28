@@ -3,6 +3,7 @@ import Modal from './Modal';
 interface ConfirmDialogProps {
   title: string;
   message: string;
+  error?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: 'danger' | 'warning';
@@ -14,6 +15,7 @@ interface ConfirmDialogProps {
 export default function ConfirmDialog({
   title,
   message,
+  error,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   tone = 'danger',
@@ -36,6 +38,7 @@ export default function ConfirmDialog({
           <p>{message}</p>
         </div>
       </div>
+      {error && <div className="error-msg">{error}</div>}
       <div className="modal-footer">
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           {cancelLabel}

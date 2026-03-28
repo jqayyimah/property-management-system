@@ -120,10 +120,12 @@ def update_message_template(
 @router.get("/channels", response_model=ReminderChannelsResponse)
 def get_channels(
     db: Session = Depends(get_db),
-    _user: dict = Depends(require_admin_or_landlord),
+    user: dict = Depends(require_admin_or_landlord),
 ):
     return ReminderChannelsResponse(
-        channels=reminder_service.get_enabled_channels(db)
+        channels=reminder_service.get_enabled_channels(
+            db, landlord_id=_landlord_id(user)
+        )
     )
 
 
@@ -134,7 +136,9 @@ def update_channels(
     user: dict = Depends(require_admin_or_landlord),
 ):
     try:
-        channels = reminder_service.save_enabled_channels(db, body.channels)
+        channels = reminder_service.save_enabled_channels(
+            db, body.channels, landlord_id=_landlord_id(user)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     create_audit_log(
