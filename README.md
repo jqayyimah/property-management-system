@@ -74,3 +74,8 @@ The generated static files are in `frontend/dist`.
    - property/apartment/tenant/rent flows
    - reminder scheduling
    - billing checkout
+
+ # Run backend Service
+   - python3 -m uvicorn app.api:app --reload --port 8000
+
+

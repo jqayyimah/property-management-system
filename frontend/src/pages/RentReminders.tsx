@@ -108,7 +108,7 @@ export default function RentReminders() {
 
       {/* Message template editor */}
       <div style={{ marginTop: '2rem' }}>
-        <ReminderConfig />
+        <ReminderConfig variant="template" />
       </div>
     </div>
   );

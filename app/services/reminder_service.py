@@ -33,6 +33,7 @@ CHANNELS_SETTING_KEY = "reminder_channels"
 SCHEDULE_SETTING_KEY = "reminder_schedule"
 SUPPORTED_CHANNELS = ("sms", "whatsapp", "email", "dashboard")
 DEFAULT_CHANNELS = ["sms", "whatsapp", "email", "dashboard"]
+REQUIRED_CHANNELS = ["sms", "email", "dashboard"]
 DEFAULT_REMINDER_SCHEDULE = [
     {
         "reminder_type": "30_DAYS",
@@ -202,61 +203,80 @@ def save_reminder_template(
     db.commit()
 
 
+def _load_channels_for_key(db: Session, key: str) -> list[str]:
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not setting:
+        return []
+
+    try:
+        channels = json.loads(setting.value)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(channels, list):
+        return []
+
+    normalized = [str(channel).lower() for channel in channels]
+    return [channel for channel in normalized if channel in SUPPORTED_CHANNELS]
+
+
+def _get_global_channels(db: Session) -> list[str]:
+    channels = _load_channels_for_key(db, CHANNELS_SETTING_KEY)
+    return channels or DEFAULT_CHANNELS.copy()
+
+
 def get_enabled_channels(db: Session, landlord_id: Optional[int] = None) -> list[str]:
-    for key in _channel_setting_keys(landlord_id):
-        setting = (
-            db.query(AppSetting).filter(
-                AppSetting.key == key).first()
-        )
-        if not setting:
-            continue
+    if landlord_id is None:
+        return _get_global_channels(db)
 
-        try:
-            channels = json.loads(setting.value)
-        except json.JSONDecodeError:
-            continue
+    global_channels = set(_get_global_channels(db))
+    required = [channel for channel in REQUIRED_CHANNELS if channel in global_channels]
 
-        if not isinstance(channels, list):
-            continue
+    landlord_key = f"{CHANNELS_SETTING_KEY}:landlord:{landlord_id}"
+    landlord_channels = _load_channels_for_key(db, landlord_key)
 
-        normalized = [str(channel).lower() for channel in channels]
-        valid_channels = [channel for channel in normalized if channel in SUPPORTED_CHANNELS]
-        if valid_channels:
-            return valid_channels
+    if landlord_channels:
+        whatsapp_enabled = "whatsapp" in landlord_channels and "whatsapp" in global_channels
+    else:
+        whatsapp_enabled = "whatsapp" in global_channels
 
-    return DEFAULT_CHANNELS.copy()
+    return required + (["whatsapp"] if whatsapp_enabled else [])
 
 
 def save_enabled_channels(
     db: Session, channels: list[str], landlord_id: Optional[int] = None
 ) -> list[str]:
-    normalized = []
+    normalized: list[str] = []
     for channel in channels:
         value = str(channel).lower()
         if value in SUPPORTED_CHANNELS and value not in normalized:
             normalized.append(value)
 
-    if not normalized:
-        raise ValueError("At least one reminder channel must be enabled")
+    if landlord_id is None:
+        if not normalized:
+            raise ValueError("At least one reminder channel must be enabled")
+        key = CHANNELS_SETTING_KEY
+        payload = json.dumps(normalized)
+    else:
+        global_channels = set(_get_global_channels(db))
+        required = [channel for channel in REQUIRED_CHANNELS if channel in global_channels]
+        whatsapp_enabled = "whatsapp" in normalized and "whatsapp" in global_channels
+        normalized = required + (["whatsapp"] if whatsapp_enabled else [])
+        key = f"{CHANNELS_SETTING_KEY}:landlord:{landlord_id}"
+        payload = json.dumps(normalized)
 
-    key = (
-        f"{CHANNELS_SETTING_KEY}:landlord:{landlord_id}"
-        if landlord_id is not None
-        else CHANNELS_SETTING_KEY
-    )
-    setting = (
-        db.query(AppSetting).filter(
-            AppSetting.key == key).first()
-    )
-    payload = json.dumps(normalized)
+        if not normalized and not required:
+            # Admin disabled all global channels; allow landlord settings to be empty.
+            payload = json.dumps([])
 
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
     if setting:
         setting.value = payload
     else:
         db.add(AppSetting(key=key, value=payload))
 
     db.commit()
-    return normalized
+    return json.loads(payload)
 
 
 def _normalize_schedule_rule(raw_rule: dict) -> dict:

@@ -4,7 +4,6 @@ import Pagination from '../../components/Pagination';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { AdminLandlord } from '../../types';
 import {
-  approveLandlord,
   deactivateLandlord,
   deleteLandlord,
   getLandlords,
@@ -59,7 +58,6 @@ export default function AdminLandlords() {
   const [deleteError, setDeleteError] = useState('');
   const [form, setForm] = useState<EditForm>(emptyForm);
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [approvingId, setApprovingId] = useState<number | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
@@ -148,31 +146,6 @@ export default function AdminLandlords() {
     setActionError({ rowId: null, message: '' });
   };
 
-  const handleApprove = async (landlord: AdminLandlord) => {
-    if (!landlord.user_id) {
-      setActionError({
-        rowId: landlord.id,
-        message: 'This landlord is missing a linked user account and cannot be approved.',
-      });
-      return;
-    }
-
-    setApprovingId(landlord.id);
-    setActionError({ rowId: landlord.id, message: '' });
-
-    try {
-      await approveLandlord(landlord.user_id);
-      await load();
-    } catch (err: unknown) {
-      setActionError({
-        rowId: landlord.id,
-        message: getApiErrorMessage(err, 'Failed to approve landlord'),
-      });
-    } finally {
-      setApprovingId(null);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTarget) return;
@@ -241,8 +214,8 @@ export default function AdminLandlords() {
           <span className="page-kicker">Admin</span>
           <h1 className="page-title">Landlord Management</h1>
           <p className="page-subtitle">
-            Approve, update, deactivate, and remove landlord accounts from a
-            single admin control surface.
+            Update, deactivate, and remove landlord accounts from a single admin
+            control surface.
           </p>
         </div>
         <div className="page-actions">
@@ -367,7 +340,7 @@ export default function AdminLandlords() {
                         </strong>
                         {search
                           ? 'Try another name, email address, phone number, or status.'
-                          : 'Approved and pending landlord accounts will appear here.'}
+                          : 'Landlord accounts will appear here.'}
                       </div>
                     </td>
                   </tr>
@@ -460,18 +433,6 @@ export default function AdminLandlords() {
                               >
                                 View Details
                               </button>
-                              {!landlord.is_active && (
-                                <button
-                                  className="context-menu-item"
-                                  onClick={() => {
-                                    void handleApprove(landlord);
-                                    setMenuTargetId(null);
-                                  }}
-                                  disabled={approvingId === landlord.id || !landlord.user_id}
-                                >
-                                  {approvingId === landlord.id ? 'Approving...' : 'Approve'}
-                                </button>
-                              )}
                               {landlord.is_active && (
                                 <button
                                   className="context-menu-item"

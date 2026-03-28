@@ -1,17 +1,26 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPassword } from '../services/authService';
 
 type ApiErr = { response?: { data?: { detail?: string } } };
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    if (!success) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      navigate('/login');
+    }, 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, [navigate, success]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,7 +39,7 @@ export default function ResetPassword() {
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
-      setSuccess(result.message);
+      setSuccess(`${result.message} Redirecting to login...`);
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {

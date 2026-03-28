@@ -91,7 +91,8 @@ export default function ReminderConfig({
   const previewContainsHtml = /<\/?[a-z][\s\S]*>/i.test(previewMessage);
   const showSettings = variant === 'full' || variant === 'settings';
   const showTemplate = variant === 'full' || variant === 'template';
-  const showTestSend = isAdmin && showSettings;
+  const showTestSend = isAdmin;
+  const alwaysOnChannels: ReminderChannel[] = ['sms', 'email', 'dashboard'];
 
   const resetTemplateViewport = () => {
     requestAnimationFrame(() => {
@@ -206,42 +207,53 @@ export default function ReminderConfig({
           <p className="config-hint">
             SMS and WhatsApp use the tenant phone number, Email uses the tenant email,
             and Dashboard creates an in-app record without external delivery.
+            {!isAdmin && (
+              <>
+                {' '}
+                Email, SMS, and Dashboard stay on for landlords; only WhatsApp is configurable.
+              </>
+            )}
           </p>
 
           <div className="toggle-grid">
-            {CHANNEL_OPTIONS.map((option) => {
-              const checked = channels.includes(option.value);
-              return (
-                <label
-                  key={option.value}
-                  className={`toggle-card ${checked ? 'is-active' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      setStatus('idle');
-                      setErrorMessage('');
-                      setChannels((current) =>
-                        e.target.checked
-                          ? [...current, option.value]
-                          : current.filter((value) => value !== option.value)
-                      );
-                    }}
-                  />
-                  <span className="toggle-icon" aria-hidden="true">
-                    {option.icon}
-                  </span>
-                  <span className="toggle-content">
-                    <span className="toggle-title">{option.label}</span>
-                    <span className="toggle-desc">{option.description}</span>
-                  </span>
-                  <span className="toggle-switch" aria-hidden="true" />
-                </label>
-              );
-            })}
-          </div>
+        {CHANNEL_OPTIONS.map((option) => {
+          const checked = channels.includes(option.value);
+          const locked = !isAdmin && alwaysOnChannels.includes(option.value);
+          return (
+            <label
+              key={option.value}
+              className={`toggle-card ${checked ? 'is-active' : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (locked) return;
+                  setStatus('idle');
+                  setErrorMessage('');
+                  setChannels((current) =>
+                    e.target.checked
+                      ? [...current, option.value]
+                      : current.filter((value) => value !== option.value)
+                  );
+                }}
+              />
+              <span className="toggle-icon" aria-hidden="true">
+                {option.icon}
+              </span>
+              <span className="toggle-content">
+                <span className="toggle-title">
+                  {option.label}
+                  {locked && <span className="badge badge-vacant" style={{ marginLeft: '0.5rem' }}>Always on</span>}
+                </span>
+                <span className="toggle-desc">{option.description}</span>
+              </span>
+              <span className="toggle-switch" aria-hidden="true" />
+            </label>
+          );
+        })}
+      </div>
 
           <div className="divider" />
 

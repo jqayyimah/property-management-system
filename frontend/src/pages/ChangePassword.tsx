@@ -60,20 +60,17 @@ export default function ChangePassword() {
         </div>
       </div>
 
-      {!isAdmin && (
-        <div className="section-block">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Reminder Settings</h2>
-              <p className="section-subtitle">
-                Configure delivery channels, schedule timing, and the reminder
-                message template from settings.
-              </p>
-            </div>
+      <div className="section-block">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Reminder Settings</h2>
+            <p className="section-subtitle">
+              Configure delivery channels and schedule timing from settings.
+            </p>
           </div>
-          <ReminderConfig variant="settings" />
         </div>
-      )}
+        <ReminderConfig variant="settings" />
+      </div>
 
       <div
         className="card"

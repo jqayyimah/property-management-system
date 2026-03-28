@@ -65,7 +65,7 @@ def landlord_signup(
         email=payload.email,
         password_hash=hash_password(payload.password),
         role=UserRole.LANDLORD,
-        is_active=False,          # 🔒 admin activation required
+        is_active=False,          # activated on email verification
         is_email_verified=False,
         landlord_id=landlord.id,
     )
@@ -101,12 +101,11 @@ def landlord_signup(
             </a>
         </p>
         <p>This link expires in {EMAIL_VERIFICATION_TTL_HOURS} hours.</p>
-        <p>After verification, your account will still require admin activation before you can log in.</p>
         """,
     )
 
     return {
-        "message": "Signup successful. Check your email to verify your account, then await admin activation.",
+        "message": "Signup successful. Check your email to verify your account.",
     }
 
 
@@ -128,6 +127,7 @@ def verify_email(
         )
 
     user.is_email_verified = True
+    user.is_active = True
     user.email_verification_token = None
     user.email_verification_token_expiry = None
     create_audit_log(
@@ -143,7 +143,7 @@ def verify_email(
     db.commit()
 
     return {
-        "message": "Email verified successfully. Await admin activation if your account is still pending.",
+        "message": "Email verified successfully. You can now log in.",
     }
 
 
